@@ -1,0 +1,18 @@
+include MANIFEST.in
+include requirements.txt
+include *.json
+include *.md
+include *.py
+include *.txt
+recursive-include trtcmb *.css
+recursive-include trtcmb *.csv
+recursive-include trtcmb *.html
+recursive-include trtcmb *.ico
+recursive-include trtcmb *.js
+recursive-include trtcmb *.json
+recursive-include trtcmb *.md
+recursive-include trtcmb *.png
+recursive-include trtcmb *.py
+recursive-include trtcmb *.svg
+recursive-include trtcmb *.txt
+recursive-exclude trtcmb *.pyc
