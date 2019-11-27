@@ -63,7 +63,8 @@ class TCMBConnection:
         else:
             pass
         series_list = []
-        for currency in TCMBCurrency.get_list_of_enabled_currencies():
+        currency_list = TCMBCurrency.get_list_of_enabled_currencies()
+        for currency in currency_list:
             series_prefix = ["TP", "DK"]
             stmp = series_prefix.append(currency.get("currency_name"))
             series_list.append(self.inner_separator.join(stmp.append(currency.get(self.buying_code))))
