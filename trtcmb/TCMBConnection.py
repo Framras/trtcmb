@@ -65,10 +65,11 @@ class TCMBConnection:
         series_list = []
         currency_list = TCMBCurrency.get_list_of_enabled_currencies()
         for currency in currency_list:
-            buying_series = ["TP", "DK", currency.get("currency_name"), self.buying_code]
-            selling_series = ["TP", "DK", currency.get("currency_name"), self.selling_code]
-            series_list.append(self.inner_separator.join(buying_series))
-            series_list.append(self.inner_separator.join(selling_series))
+            if currency.get("currency_name") != "TRY":
+                buying_series = ["TP", "DK", currency.get("currency_name"), self.buying_code]
+                selling_series = ["TP", "DK", currency.get("currency_name"), self.selling_code]
+                series_list.append(self.inner_separator.join(buying_series))
+                series_list.append(self.inner_separator.join(selling_series))
 
         if self.start_date is not None and \
                 self.start_date > datetime.date(1950, 1, 2):
@@ -93,6 +94,7 @@ class TCMBConnection:
         key = self.key_prefix + self.key
 
         url = self.service_path + series + tcmb_start_date + tcmb_end_date + return_type + key
+        frappe.throw(url)
 
         try:
             r = self._s.request(method=self.service_method, url=url)
