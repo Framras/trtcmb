@@ -65,10 +65,10 @@ class TCMBConnection:
         series_list = []
         currency_list = TCMBCurrency.get_list_of_enabled_currencies()
         for currency in currency_list:
-            series_prefix = ["TP", "DK"]
-            stmp = series_prefix.append(currency.get("currency_name"))
-            series_list.append(self.inner_separator.join(stmp.append(self.buying_code)))
-            series_list.append(self.inner_separator.join(stmp.append(self.selling_code)))
+            buying_series = ["TP", "DK", currency.get("currency_name"), self.buying_code]
+            selling_series = ["TP", "DK", currency.get("currency_name"), self.selling_code]
+            series_list.append(self.inner_separator.join(buying_series))
+            series_list.append(self.inner_separator.join(selling_series))
 
         if self.start_date is not None and \
                 self.start_date > datetime.date(1950, 1, 2):
