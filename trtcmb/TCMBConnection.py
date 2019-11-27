@@ -62,7 +62,6 @@ class TCMBConnection:
             return False
         else:
             pass
-        tcmb_start_date = datetime.date()
         series_list = []
         for currency in TCMBCurrency.get_list_of_enabled_currencies():
             series_prefix = ["TP", "DK"]
