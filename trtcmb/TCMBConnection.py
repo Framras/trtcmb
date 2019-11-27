@@ -103,7 +103,7 @@ class TCMBConnection:
                 # Loading the response data into a dict variable json.loads takes in only binary or string
                 # variables so using content to fetch binary content Loads (Load String) takes a Json file and
                 # converts into python data structure (dict or list, depending on JSON)
-                return json.loads(r.content)
+                return json.loads(r.text)
         except HTTPError as e:
             return r.raise_for_status()
         finally:
