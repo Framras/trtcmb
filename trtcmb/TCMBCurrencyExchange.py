@@ -1,7 +1,7 @@
 import frappe
 import datetime
 
-from apps.frappe.frappe.utils.data import flt
+from frappe.utils.data import flt
 
 
 class TCMBCurrencyExchange:
