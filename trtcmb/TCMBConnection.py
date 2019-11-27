@@ -103,8 +103,7 @@ class TCMBConnection:
                 return json.loads(r.content)
             elif "xml" in self.type:
                 currency_exchange_dict = {}
-                tree = ET.parse(r.content)
-                document = tree.getroot()
+                document = ET.fromstring(r.content)
                 if document.tag == "document":
                     if ET.iselement(document):
                         for total_count_data in document.findall("./totalCount"):
@@ -116,6 +115,7 @@ class TCMBConnection:
                                 item_dict[item_detail.tag] = item_detail.text
                             items_list.append(item_dict)
                         currency_exchange_dict["items"] = items_list
+                frappe.throw(currency_exchange_dict)
                 return currency_exchange_dict
 
         except HTTPError as e:
