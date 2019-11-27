@@ -47,8 +47,8 @@ class TCMBConnection:
             for key in exchange_rates_of_date.keys():
                 if key not in ["Tarih", "UNIXTIME"]:
                     if exchange_rates_of_date.get(key) is None:
-                        exchange_rate_date = datetime.strptime(exchange_rates_of_date.get("Tarih"),
-                                                               self.tcmb_date_format).date() - self.a_day
+                        exchange_rate_date = datetime.datetime.strptime(exchange_rates_of_date.get("Tarih"),
+                                                                        self.tcmb_date_format).date() - self.a_day
                         exchange_rates_of_date[key] = self.get_exchange_rate_for_single_date_and_currency(
                             "bie_dkdovizgn", key, exchange_rate_date)
                     else:
