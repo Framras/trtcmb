@@ -26,17 +26,18 @@ class TCMBConnection:
         self.end_date_prefix = "&endDate="
         self.type_prefix = "&type="
         self.key_prefix = "&key="
+        self.company_doctype = "Company"
         self.integration_setting_doctype = "TR TCMB EVDS Integration Setting"
         self.company_setting_doctype = "TR TCMB EVDS Integration Company Setting"
         # global settings
         self.service_path = frappe.db.get_single_value(self.integration_setting_doctype, "service_path")
-        self.company = frappe.defaults.get_user_default("Company")
+        self.company = frappe.defaults.get_user_default(self.company_doctype)
         # company settings
         self.enable = frappe.db.get_value(self.company_setting_doctype, self.company, "enable")
         self.key = frappe.db.get_value(self.company_setting_doctype, self.company, "key")
         self.start_date = frappe.db.get_value(self.company_setting_doctype, self.company, "start_date")
         self.last_updated = frappe.db.get_value(self.company_setting_doctype, self.company, "last_updated")
-        self.date_of_establishment = frappe.db.get_value(self.company_setting_doctype, self.company,
+        self.date_of_establishment = frappe.db.get_value(self.company_doctype, self.company,
                                                          "date_of_establishment")
 
     def get_exchange_rates(self):
