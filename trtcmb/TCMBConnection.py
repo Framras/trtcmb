@@ -1,67 +1,133 @@
 import frappe
 import requests
-from requests import HTTPError
-from requests.auth import HTTPBasicAuth
-import json
-from trtcmb.TCMBCurrency import TCMBCurrency
 import datetime
+import json
+
+from requests import HTTPError
+from trtcmb.TCMBCurrency import TCMBCurrency
+from trtcmb.TCMBCurrencyExchange import TCMBCurrencyExchange
 
 
 class TCMBConnection:
     def __init__(self):
         self._s = requests.Session()
         self.a_day = datetime.timedelta(days=1)
+        self.service_method = "GET"
+        self.try_code = "YTL"
+        self.tcmb_date_format = "%d-%m-%Y"
+        self.buying_code = "A"
+        self.selling_code = "S"
+        self.type = "json"
         self.doctype = "Currency"
+        self.inner_separator = "."
+        self.series_separator = "-"
+        self.series_prefix = "/series="
+        self.start_date_prefix = "&startDate="
+        self.end_date_prefix = "&endDate="
+        self.type_prefix = "&type="
+        self.key_prefix = "&key="
         self.integration_setting_doctype = "TR TCMB EVDS Integration Setting"
         self.company_setting_doctype = "TR TCMB EVDS Integration Company Setting"
         # global settings
         self.service_path = frappe.db.get_single_value(self.integration_setting_doctype, "service_path")
-        self.try_code = frappe.db.get_single_value(self.integration_setting_doctype, "try_code")
-        self.buying_code = frappe.db.get_single_value(self.integration_setting_doctype, "buying_code")
-        self.selling_code = frappe.db.get_single_value(self.integration_setting_doctype, "selling_code")
-        self.type = frappe.db.get_single_value(self.integration_setting_doctype, "type")
         self.company = frappe.defaults.get_user_default("Company")
         # company settings
         self.enable = frappe.db.get_value(self.company_setting_doctype, self.company, "enable")
         self.key = frappe.db.get_value(self.company_setting_doctype, self.company, "key")
+        self.start_date = frappe.db.get_value(self.company_setting_doctype, self.company, "start_date")
         self.last_updated = frappe.db.get_value(self.company_setting_doctype, self.company, "last_updated")
         self.date_of_establishment = frappe.db.get_value(self.company_setting_doctype, self.company,
                                                          "date_of_establishment")
 
-    def connect(self, integration: str):
+    def get_exchange_rates(self):
+        exchange_rates = self.get_exchange_rates_for_enabled_currencies("bie_dkdovizgn")
+        exchange_rates_list = exchange_rates.get("items")
+        for exchange_rates_of_date in exchange_rates_list:
+            for key in exchange_rates_of_date.keys():
+                if key not in ["Tarih", "UNIXTIME"]:
+                    if exchange_rates_of_date.get(key) is None:
+                        exchange_rate_date = datetime.strptime(exchange_rates_of_date.get("Tarih"),
+                                                               self.tcmb_date_format).date() - self.a_day
+                        exchange_rates_of_date[key] = self.get_exchange_rate_for_single_date_and_currency(
+                            "bie_dkdovizgn", key, exchange_rate_date)
+                    else:
+                        pass
+            TCMBCurrencyExchange.commit_single_exchange_rate(exchange_rates_of_date)
+
+    def get_exchange_rates_for_enabled_currencies(self, datagroup_code: str):
+        if datagroup_code != "bie_dkdovizgn" or self.enable != 1:
+            # should be error
+            return False
+        else:
+            pass
+        tcmb_start_date = datetime.date()
+        series_list = []
+        for currency in TCMBCurrency.get_list_of_enabled_currencies():
+            series_prefix = ["TP", "DK"]
+            stmp = series_prefix.append(currency.get("currency_name"))
+            series_list.append(self.inner_separator.join(stmp.append(currency.get(self.buying_code))))
+            series_list.append(self.inner_separator.join(stmp.append(currency.get(self.selling_code))))
+
+        if self.start_date is not None and \
+                self.start_date > datetime.date(1950, 1, 2):
+            tcmb_start_date = self.start_date
+
+        return self.connect("bie_dkdovizgn", series_list=series_list, for_start_date=tcmb_start_date,
+                            for_end_date=datetime.date.today())
+
+    def connect(self, datagroup_code: str, series_list: list, for_start_date: datetime.date,
+                for_end_date: datetime.date):
+        if datagroup_code != "bie_dkdovizgn" or self.enable != 1:
+            # should be error
+            return False
+        else:
+            pass
+        url = ""
         # Exchange, rates, Daily, (Converted, to, TRY)
-        if integration == "bie_dkdovizgn" and self.enable == 1:
-            series = ""
-            series_prefix = "TP.DK."
-            for currency in TCMBCurrency.get_list_of_enabled_currencies():
-                if not series == "":
-                    series = series + "-" + series_prefix + currency.get("currency_name")
-                else:
-                    series = "/series=" + series_prefix + currency.get("currency_name")
+        series = self.series_prefix + self.series_separator.join(series_list)
+        tcmb_start_date = self.start_date_prefix + for_start_date.strftime(self.tcmb_date_format)
+        tcmb_end_date = self.end_date_prefix + for_end_date.strftime(self.tcmb_date_format)
+        return_type = self.type_prefix + self.type
+        key = self.key_prefix + self.key
 
-            start_date = "&startDate="
-            if self.last_updated is None or \
-                    self.last_updated < datetime.date(1950, 1, 2) or \
-                    self.date_of_establishment in None or \
-                    self.date_of_establishment < datetime.date(1950, 1, 2):
-                start_date = self.date_of_establishment
+        url = self.service_path + series + tcmb_start_date + tcmb_end_date + return_type + key
 
-            end_date = "&endDate=" + datetime.date.today() - self.a_day
-            return_type = "&type=" + self.type
-            key = "&key=" + self.key
+        try:
+            r = self._s.request(method=self.service_method, url=url)
+            # For successful API call, response code will be 200 (OK)
+            with r:
+                # Loading the response data into a dict variable json.loads takes in only binary or string
+                # variables so using content to fetch binary content Loads (Load String) takes a Json file and
+                # converts into python data structure (dict or list, depending on JSON)
+                return json.loads(r.content)
+        except HTTPError as e:
+            return r.raise_for_status()
+        finally:
+            pass
 
-            url = self.service_path + series + start_date + end_date + return_type + key
+    def get_exchange_rate_for_single_date_and_currency(self, datagroup_code: str, for_serie: str,
+                                                       for_date: datetime.date):
+        if datagroup_code != "bie_dkdovizgn" or self.enable != 1:
+            # should be error
+            return False
+        else:
+            pass
+        serie_as_list = []
+        # Exchange, rates, Daily, (Converted, to, TRY)
+        serie_as_list.append(for_serie)
 
-            try:
-                r = self._s.request(method=servicemethod, url=url, headers=self.headers, params=params,
-                                    data=servicedata, auth=HTTPBasicAuth(username, password))
-                # For successful API call, response code will be 200 (OK)
-                with r:
-                    # Loading the response data into a dict variable json.loads takes in only binary or string
-                    # variables so using content to fetch binary content Loads (Load String) takes a Json file and
-                    # converts into python data structure (dict or list, depending on JSON)
-                    return json.loads(r.content)
-            except HTTPError as e:
-                return r.raise_for_status()
-            finally:
-                pass
+        response = self.connect(datagroup_code, serie_as_list, for_date, for_date)
+        if response.get("totalCount") == 1:
+            response_list = response.get("items")
+            for item in response_list:
+                for key in item.keys():
+                    if key not in ["Tarih", "UNIXTIME"]:
+                        if item.get(key) is None:
+                            exchange_rate_date = datetime.strptime(item.get("Tarih"),
+                                                                   self.tcmb_date_format).date() - self.a_day
+                            self.get_exchange_rate_for_single_date_and_currency("bie_dkdovizgn", key,
+                                                                                exchange_rate_date)
+                        else:
+                            exchange_rate = item.get(key)
+
+        return exchange_rate
