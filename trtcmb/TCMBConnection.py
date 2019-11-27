@@ -115,9 +115,8 @@ class TCMBConnection:
             return False
         else:
             pass
-        serie_as_list = []
+        serie_as_list = [for_serie]
         # Exchange, rates, Daily, (Converted, to, TRY)
-        serie_as_list.append(for_serie)
 
         response = self.connect(datagroup_code, serie_as_list, for_date, for_date)
         if response.get("totalCount") == 1:
