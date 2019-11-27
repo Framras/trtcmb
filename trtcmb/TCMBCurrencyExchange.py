@@ -12,10 +12,12 @@ class TCMBCurrencyExchange:
     buying_code = "A"
     selling_code = "S"
     to_currency = "TRY"
+    strip_key = "UNIXTIME"
 
     @classmethod
     def commit_single_exchange_rate(cls, tcmb_data: dict):
         exchange_rate_date = datetime.datetime.strptime(tcmb_data.pop(cls.tcmb_date_key), cls.tcmb_date_format).date()
+        tcmb_data.pop(cls.strip_key)
         for key in tcmb_data.keys():
             for_selling = 0
             for_buying = 0
