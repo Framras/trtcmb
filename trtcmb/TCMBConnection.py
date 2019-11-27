@@ -94,7 +94,6 @@ class TCMBConnection:
         key = self.key_prefix + self.key
 
         url = self.service_path + series + tcmb_start_date + tcmb_end_date + return_type + key
-        frappe.throw(url)
 
         try:
             r = self._s.request(method=self.service_method, url=url)
