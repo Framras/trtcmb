@@ -2,6 +2,7 @@ import frappe
 import requests
 import datetime
 import json
+import xml.etree.ElementTree as ET
 
 from requests import HTTPError
 from trtcmb.TCMBCurrency import TCMBCurrency
@@ -17,7 +18,7 @@ class TCMBConnection:
         self.tcmb_date_format = "%d-%m-%Y"
         self.buying_code = "A"
         self.selling_code = "S"
-        self.type = "json"
+        self.type = "xml"
         self.doctype = "Currency"
         self.inner_separator = "."
         self.series_separator = "-"
@@ -98,39 +99,54 @@ class TCMBConnection:
 
         try:
             r = self._s.request(method=self.service_method, url=url)
-            # For successful API call, response code will be 200 (OK)
-            with r:
-                # Loading the response data into a dict variable json.loads takes in only binary or string
-                # variables so using content to fetch binary content Loads (Load String) takes a Json file and
-                # converts into python data structure (dict or list, depending on JSON)
-                return json.loads(r.text)
+            if "json" in self.type:
+                return json.loads(r.content)
+            elif "xml" in self.type:
+                currency_exchange_dict = {}
+                tree = ET.parse(r.content)
+                document = tree.getroot()
+                if document.tag == "document":
+                    if ET.iselement(document):
+                        for total_count_data in document.findall("./totalCount"):
+                            currency_exchange_dict["total_count"] = total_count_data.text
+                        items_list = []
+                        for items in document.findall("./items"):
+                            item_dict = {}
+                            for item_detail in items.iter():
+                                item_dict[item_detail.tag] = item_detail.text
+                            items_list.append(item_dict)
+                        currency_exchange_dict["items"] = items_list
+                return currency_exchange_dict
+
         except HTTPError as e:
             return r.raise_for_status()
+
         finally:
             pass
 
-    def get_exchange_rate_for_single_date_and_currency(self, datagroup_code: str, for_serie: str,
-                                                       for_date: datetime.date):
-        if datagroup_code != "bie_dkdovizgn" or self.enable != 1:
-            # should be error
-            return False
-        else:
-            pass
-        serie_as_list = [for_serie]
-        # Exchange, rates, Daily, (Converted, to, TRY)
 
-        response = self.connect(datagroup_code, serie_as_list, for_date, for_date)
-        if response.get("totalCount") == 1:
-            response_list = response.get("items")
-            for item in response_list:
-                for key in item.keys():
-                    if key not in ["Tarih", "UNIXTIME"]:
-                        if item.get(key) is None:
-                            exchange_rate_date = datetime.strptime(item.get("Tarih"),
-                                                                   self.tcmb_date_format).date() - self.a_day
-                            self.get_exchange_rate_for_single_date_and_currency("bie_dkdovizgn", key,
-                                                                                exchange_rate_date)
-                        else:
-                            exchange_rate = item.get(key)
+def get_exchange_rate_for_single_date_and_currency(self, datagroup_code: str, for_serie: str,
+                                                   for_date: datetime.date):
+    if datagroup_code != "bie_dkdovizgn" or self.enable != 1:
+        # should be error
+        return False
+    else:
+        pass
+    serie_as_list = [for_serie]
+    # Exchange, rates, Daily, (Converted, to, TRY)
 
-        return exchange_rate
+    response = self.connect(datagroup_code, serie_as_list, for_date, for_date)
+    if response.get("totalCount") == 1:
+        response_list = response.get("items")
+        for item in response_list:
+            for key in item.keys():
+                if key not in ["Tarih", "UNIXTIME"]:
+                    if item.get(key) is None:
+                        exchange_rate_date = datetime.strptime(item.get("Tarih"),
+                                                               self.tcmb_date_format).date() - self.a_day
+                        self.get_exchange_rate_for_single_date_and_currency("bie_dkdovizgn", key,
+                                                                            exchange_rate_date)
+                    else:
+                        exchange_rate = item.get(key)
+
+    return exchange_rate
