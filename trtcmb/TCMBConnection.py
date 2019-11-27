@@ -53,6 +53,7 @@ class TCMBConnection:
                     else:
                         pass
             TCMBCurrencyExchange.commit_single_exchange_rate(exchange_rates_of_date)
+        return datetime.date.today()
 
     def get_exchange_rates_for_enabled_currencies(self, datagroup_code: str):
         if datagroup_code != "bie_dkdovizgn" or self.enable != 1:

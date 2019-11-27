@@ -1,0 +1,77 @@
+{
+  "autoname": "field:company_name",
+  "creation": "2019-11-27 00:07:52.669018",
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "company_name",
+    "enable",
+    "key",
+    "start_date",
+    "initiate_integration",
+    "last_updated"
+  ],
+  "fields": [
+    {
+      "fieldname": "company_name",
+      "fieldtype": "Link",
+      "label": "Company",
+      "options": "Company",
+      "unique": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "enable",
+      "fieldtype": "Check",
+      "label": "Enable"
+    },
+    {
+      "fieldname": "key",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Integration Key",
+      "reqd": 1
+    },
+    {
+      "fieldname": "start_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "label": "Default Integration Start Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "initiate_integration",
+      "fieldtype": "Button",
+      "label": "Initiate Integration"
+    },
+    {
+      "fieldname": "last_updated",
+      "fieldtype": "Date",
+      "label": "Last Updated Date"
+    }
+  ],
+  "modified": "2019-11-27 17:04:19.502161",
+  "modified_by": "Administrator",
+  "module": "Trtcmb",
+  "name": "TR TCMB EVDS Integration Company Setting",
+  "owner": "tufan.kaynak@framras.com",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "quick_entry": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1
+}
