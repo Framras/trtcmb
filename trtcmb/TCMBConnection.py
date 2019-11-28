@@ -18,7 +18,7 @@ class TCMBConnection:
         self.tcmb_date_format = "%d-%m-%Y"
         self.buying_code = "A"
         self.selling_code = "S"
-        self.type = "xml"
+        self.type = "json"
         self.doctype = "Currency"
         self.inner_separator = "."
         self.series_separator = "-"
@@ -95,7 +95,6 @@ class TCMBConnection:
         key = self.key_prefix + self.key
 
         url = self.service_path + series + tcmb_start_date + tcmb_end_date + return_type + key
-        null = None
 
         try:
             r = self._s.request(method=self.service_method, url=url)
@@ -103,7 +102,7 @@ class TCMBConnection:
                 return json.loads(r.content)
             elif "xml" in self.type:
                 currency_exchange_dict = {}
-                document = ET.fromstring(r.content)
+                document = ET.fromstring(r.text)
                 if document.tag == "document":
                     if ET.iselement(document):
                         for total_count_data in document.findall("./totalCount"):
@@ -112,10 +111,15 @@ class TCMBConnection:
                         for items in document.findall("./items"):
                             item_dict = {}
                             for item_detail in items.iter():
-                                item_dict[item_detail.tag] = item_detail.text
+                                if item_detail.tag != "UNIXTIME":
+                                    item_dict[item_detail.tag] = item_detail.text
+                                elif item_detail.tag == "UNIXTIME":
+                                    for unixtime in item_detail.iter():
+                                        number_long = {unixtime.tag: unixtime.text}
+                                    item_dict["UNIXTIME"] = number_long
+
                             items_list.append(item_dict)
                         currency_exchange_dict["items"] = items_list
-                frappe.throw(currency_exchange_dict)
                 return currency_exchange_dict
 
         except HTTPError as e:
@@ -124,29 +128,28 @@ class TCMBConnection:
         finally:
             pass
 
+    def get_exchange_rate_for_single_date_and_currency(self, datagroup_code: str, for_serie: str,
+                                                       for_date: datetime.date):
+        if datagroup_code != "bie_dkdovizgn" or self.enable != 1:
+            # should be error
+            return False
+        else:
+            pass
+        serie_as_list = [for_serie]
+        # Exchange, rates, Daily, (Converted, to, TRY)
 
-def get_exchange_rate_for_single_date_and_currency(self, datagroup_code: str, for_serie: str,
-                                                   for_date: datetime.date):
-    if datagroup_code != "bie_dkdovizgn" or self.enable != 1:
-        # should be error
-        return False
-    else:
-        pass
-    serie_as_list = [for_serie]
-    # Exchange, rates, Daily, (Converted, to, TRY)
+        response = self.connect(datagroup_code, serie_as_list, for_date, for_date)
+        if response.get("totalCount") == 1:
+            response_list = response.get("items")
+            for item in response_list:
+                for key in item.keys():
+                    if key not in ["Tarih", "UNIXTIME"]:
+                        if item.get(key) is None:
+                            exchange_rate_date = datetime.datetime.strptime(item.get("Tarih"),
+                                                                            self.tcmb_date_format).date() - self.a_day
+                            self.get_exchange_rate_for_single_date_and_currency("bie_dkdovizgn", key,
+                                                                                exchange_rate_date)
+                        else:
+                            exchange_rate = item.get(key)
 
-    response = self.connect(datagroup_code, serie_as_list, for_date, for_date)
-    if response.get("totalCount") == 1:
-        response_list = response.get("items")
-        for item in response_list:
-            for key in item.keys():
-                if key not in ["Tarih", "UNIXTIME"]:
-                    if item.get(key) is None:
-                        exchange_rate_date = datetime.strptime(item.get("Tarih"),
-                                                               self.tcmb_date_format).date() - self.a_day
-                        self.get_exchange_rate_for_single_date_and_currency("bie_dkdovizgn", key,
-                                                                            exchange_rate_date)
-                    else:
-                        exchange_rate = item.get(key)
-
-    return exchange_rate
+        return exchange_rate

@@ -8,7 +8,6 @@ class TCMBCurrencyExchange:
     doctype = "Currency Exchange"
     tcmb_date_key = "Tarih"
     tcmb_date_format = "%d-%m-%Y"
-    a_day = datetime.timedelta(days=1)
     buying_code = "A"
     selling_code = "S"
     to_currency = "TRY"
