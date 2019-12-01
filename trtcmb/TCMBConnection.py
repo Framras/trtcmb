@@ -55,12 +55,24 @@ class TCMBConnection:
         for i in range(delta.days + 1):
             exchange_rate_day = tcmb_start_date + datetime.timedelta(days=i)
             for currency in currency_list:
-                if currency.get("currency_name") != "TRY":
+                if currency.get("currency_name") != "TRY" and \
+                        frappe.db.count(doctype=TCMBCurrencyExchange.doctype, filters={
+                            "date": exchange_rate_day,
+                            "from_currency": currency.get("currency_name"),
+                            "to_currency": TCMBCurrencyExchange.to_currency,
+                            "for_buying": 1
+                        }):
                     TCMBCurrencyExchange.commit_single_currency_exchange_rate(
                         self.get_single_exchange_rate(currency=currency.get("currency_name"),
                                                       for_date=exchange_rate_day,
                                                       purpose="for_buying"))
-
+                if currency.get("currency_name") != "TRY" and \
+                        frappe.db.count(doctype=TCMBCurrencyExchange.doctype, filters={
+                            "date": exchange_rate_day,
+                            "from_currency": currency.get("currency_name"),
+                            "to_currency": TCMBCurrencyExchange.to_currency,
+                            "for_selling": 1
+                        }):
                     TCMBCurrencyExchange.commit_single_currency_exchange_rate(
                         self.get_single_exchange_rate(currency=currency.get("currency_name"),
                                                       for_date=exchange_rate_day,
