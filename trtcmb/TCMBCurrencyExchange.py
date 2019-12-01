@@ -6,21 +6,24 @@ from frappe.utils.data import flt
 
 class TCMBCurrencyExchange:
     doctype = "Currency Exchange"
+    doctype_field_name = "exchange_rate"
     tcmb_date_key = "Tarih"
     tcmb_date_format = "%d-%m-%Y"
+    response_separator = "_"
     buying_code = "A"
     selling_code = "S"
     to_currency = "TRY"
     strip_key = "UNIXTIME"
 
     @classmethod
-    def commit_single_exchange_rate(cls, tcmb_data: dict):
-        exchange_rate_date = datetime.datetime.strptime(tcmb_data.pop(cls.tcmb_date_key), cls.tcmb_date_format).date()
-        tcmb_data.pop(cls.strip_key)
-        for key in tcmb_data.keys():
+    def commit_single_currency_exchange_rate(cls, tcmb_data: dict):
+        data_dict = dict(tcmb_data.get("items")[0])
+        exchange_rate_date = datetime.datetime.strptime(data_dict.pop(cls.tcmb_date_key), cls.tcmb_date_format).date()
+        data_dict.pop(cls.strip_key)
+        for key in data_dict.keys():
             for_selling = 0
             for_buying = 0
-            key_list = str(key).split("_")
+            key_list = str(key).split(cls.response_separator)
             from_currency = key_list[2]
             if key_list[3] == cls.selling_code:
                 for_selling = 1
@@ -41,8 +44,8 @@ class TCMBCurrencyExchange:
                 newdoc.to_currency = cls.to_currency
                 newdoc.for_buying = for_buying
                 newdoc.for_selling = for_selling
-                newdoc.exchange_rate = flt(tcmb_data.get(key))
-                newdoc.insert()
+                newdoc.exchange_rate = flt(data_dict.get(key))
+                return newdoc.insert()
             else:
                 frdoc = frappe.get_doc(doctype=cls.doctype, filters={
                     "date": exchange_rate_date,
@@ -51,5 +54,5 @@ class TCMBCurrencyExchange:
                     "for_buying": for_buying,
                     "for_selling": for_selling
                 })
-                frdoc.exchange_rate = flt(tcmb_data.get(key))
-                frdoc.save()
+                frdoc.exchange_rate = flt(data_dict.get(key))
+                return frdoc.save()

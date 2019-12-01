@@ -1,8 +1,6 @@
 import frappe
 import requests
 import datetime
-import json
-import xml.etree.ElementTree as ET
 
 from trtcmb.TCMBCurrency import TCMBCurrency
 from trtcmb.TCMBCurrencyExchange import TCMBCurrencyExchange
@@ -14,13 +12,14 @@ class TCMBConnection:
         self.a_day = datetime.timedelta(days=1)
         self.service_method = "GET"
         self.try_code = "YTL"
-        self.tcmb_date_format = "%d-%m-%Y"
-        self.buying_code = "A"
-        self.selling_code = "S"
+        self.tcmb_date_format = TCMBCurrencyExchange.tcmb_date_format
         self.type = "json"
         self.doctype = "Currency"
-        self.inner_separator = "."
         self.series_separator = "-"
+        self.inner_separator = "."
+        self.response_separator = TCMBCurrencyExchange.response_separator
+        self.buying_code = TCMBCurrencyExchange.buying_code
+        self.selling_code = TCMBCurrencyExchange.selling_code
         self.series_prefix = "/series="
         self.start_date_prefix = "&startDate="
         self.end_date_prefix = "&endDate="
@@ -40,43 +39,34 @@ class TCMBConnection:
         self.date_of_establishment = frappe.db.get_value(self.company_doctype, self.company,
                                                          "date_of_establishment")
 
-    def get_exchange_rates(self):
-        exchange_rates = self.get_exchange_rates_for_enabled_currencies("bie_dkdovizgn")
-        exchange_rates_list = exchange_rates.get("items")
-        for exchange_rates_of_date in exchange_rates_list:
-            for key in exchange_rates_of_date.keys():
-                if key not in ["Tarih", "UNIXTIME"]:
-                    if exchange_rates_of_date.get(key) is None:
-                        exchange_rate_date = datetime.datetime.strptime(exchange_rates_of_date.get("Tarih"),
-                                                                        self.tcmb_date_format).date() - self.a_day
-                        exchange_rates_of_date[key] = self.get_exchange_rate_for_single_date_and_currency(
-                            "bie_dkdovizgn", key, exchange_rate_date)
-                    else:
-                        pass
-            TCMBCurrencyExchange.commit_single_exchange_rate(exchange_rates_of_date)
-        return datetime.date.today()
-
     def get_exchange_rates_for_enabled_currencies(self, datagroup_code: str):
         if datagroup_code != "bie_dkdovizgn" or self.enable != 1:
             # should be error
             return False
         else:
             pass
-        series_list = []
         currency_list = TCMBCurrency.get_list_of_enabled_currencies()
-        for currency in currency_list:
-            if currency.get("currency_name") != "TRY":
-                buying_series = ["TP", "DK", currency.get("currency_name"), self.buying_code]
-                selling_series = ["TP", "DK", currency.get("currency_name"), self.selling_code]
-                series_list.append(self.inner_separator.join(buying_series))
-                series_list.append(self.inner_separator.join(selling_series))
 
         if self.start_date is not None and \
                 self.start_date > datetime.date(1950, 1, 2):
             tcmb_start_date = self.start_date
 
-        return self.connect("bie_dkdovizgn", series_list=series_list, for_start_date=tcmb_start_date,
-                            for_end_date=datetime.date.today())
+        delta = datetime.date.today() - tcmb_start_date
+        for i in range(delta.days + 1):
+            exchange_rate_day = tcmb_start_date + datetime.timedelta(days=i)
+            for currency in currency_list:
+                if currency.get("currency_name") != "TRY":
+                    TCMBCurrencyExchange.commit_single_currency_exchange_rate(
+                        self.get_single_exchange_rate(currency=currency.get("currency_name"),
+                                                      for_date=exchange_rate_day,
+                                                      purpose="for_buying"))
+
+                    TCMBCurrencyExchange.commit_single_currency_exchange_rate(
+                        self.get_single_exchange_rate(currency=currency.get("currency_name"),
+                                                      for_date=exchange_rate_day,
+                                                      purpose="for_selling"))
+
+        return True
 
     def connect(self, datagroup_code: str, series_list: list, for_start_date: datetime.date,
                 for_end_date: datetime.date):
@@ -105,31 +95,25 @@ class TCMBConnection:
         finally:
             pass
 
-    def get_exchange_rate_for_single_date_and_currency(self, datagroup_code: str, for_serie: str,
-                                                       for_date: datetime.date):
-        if datagroup_code != "bie_dkdovizgn" or self.enable != 1:
-            # should be error
-            return False
-        else:
-            pass
-        serie_as_list = [for_serie]
+    def get_single_exchange_rate(self, currency: str, for_date: datetime.date, purpose: str):
+        if purpose == "for_buying":
+            currency_serie = self.inner_separator.join(
+                ["TP", "DK", currency, self.buying_code])
+        elif purpose == "for_selling":
+            currency_serie = self.inner_separator.join(
+                ["TP", "DK", currency, self.selling_code])
+        serie_as_list = [currency_serie]
         # Exchange, rates, Daily, (Converted, to, TRY)
+        response_dict = self.connect(datagroup_code="bie_dkdovizgn", series_list=serie_as_list,
+                                     for_start_date=for_date, for_end_date=for_date)
+        if response_dict.get("totalCount") == 1:
+            currency_response = currency_serie.replace(self.inner_separator, self.response_separator)
+            if response_dict.get("items")[0].get(currency_response) is None:
+                exchange_rate_date = datetime.datetime.strptime(response_dict.get("items")[0].get("Tarih"),
+                                                                self.tcmb_date_format).date() - self.a_day
+                new_dict = self.get_single_exchange_rate(currency, exchange_rate_date, purpose)
+                response_dict["items"][0][currency_response] = new_dict["items"][0][currency_response]
+            else:
+                pass
 
-        response = self.connect(datagroup_code, serie_as_list, for_date, for_date)
-        if response.get("totalCount") == 1:
-            response_list = response.get("items")
-            for item in response_list:
-                for key in item.keys():
-                    if key not in ["Tarih", "UNIXTIME"]:
-                        if item.get(key) is None or \
-                                item.get(key) == "None" or \
-                                item.get(key) == "null" or \
-                                item.get(key) == "Null":
-                            exchange_rate_date = datetime.datetime.strptime(item.get("Tarih"),
-                                                                            self.tcmb_date_format).date() - self.a_day
-                            exchange_rate = self.get_exchange_rate_for_single_date_and_currency("bie_dkdovizgn", key,
-                                                                                                exchange_rate_date)
-                        else:
-                            exchange_rate = item.get(key)
-
-        return exchange_rate
+        return response_dict
