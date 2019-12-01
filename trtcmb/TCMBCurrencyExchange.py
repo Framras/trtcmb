@@ -8,18 +8,18 @@ class TCMBCurrencyExchange:
     doctype = "Currency Exchange"
     doctype_field_name = "exchange_rate"
     tcmb_date_key = "Tarih"
+    tcmb_strip_key = "UNIXTIME"
     tcmb_date_format = "%d-%m-%Y"
     response_separator = "_"
     buying_code = "A"
     selling_code = "S"
     to_currency = "TRY"
-    strip_key = "UNIXTIME"
 
     @classmethod
     def commit_single_currency_exchange_rate(cls, tcmb_data: dict):
         data_dict = dict(tcmb_data.get("items")[0])
         exchange_rate_date = datetime.datetime.strptime(data_dict.pop(cls.tcmb_date_key), cls.tcmb_date_format).date()
-        data_dict.pop(cls.strip_key)
+        data_dict.pop(cls.tcmb_strip_key)
         for key in data_dict.keys():
             for_selling = 0
             for_buying = 0
@@ -47,12 +47,13 @@ class TCMBCurrencyExchange:
                 newdoc.exchange_rate = flt(data_dict.get(key))
                 return newdoc.insert()
             else:
-                frdoc = frappe.get_doc(doctype=cls.doctype, filters={
+                frdoc_list = frappe.db.get_list(doctype=cls.doctype, filters={
                     "date": exchange_rate_date,
                     "from_currency": from_currency,
                     "to_currency": cls.to_currency,
                     "for_buying": for_buying,
                     "for_selling": for_selling
                 })
+                frdoc = frappe.get_doc(cls.doctype, frdoc_list[0].get("name"))
                 frdoc.exchange_rate = flt(data_dict.get(key))
                 return frdoc.save()

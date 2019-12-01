@@ -66,7 +66,7 @@ class TCMBConnection:
                                                       for_date=exchange_rate_day,
                                                       purpose="for_selling"))
 
-        return True
+        return datetime.datetime.today().date()
 
     def connect(self, datagroup_code: str, series_list: list, for_start_date: datetime.date,
                 for_end_date: datetime.date):
