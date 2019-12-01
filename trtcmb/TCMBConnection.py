@@ -4,7 +4,6 @@ import datetime
 import json
 import xml.etree.ElementTree as ET
 
-from requests import HTTPError
 from trtcmb.TCMBCurrency import TCMBCurrency
 from trtcmb.TCMBCurrencyExchange import TCMBCurrencyExchange
 
@@ -97,33 +96,11 @@ class TCMBConnection:
         url = self.service_path + series + tcmb_start_date + tcmb_end_date + return_type + key
 
         try:
-            r = self._s.request(method=self.service_method, url=url)
-            if "json" in self.type:
-                return json.loads(r.content)
-            elif "xml" in self.type:
-                currency_exchange_dict = {}
-                document = ET.fromstring(r.text)
-                if document.tag == "document":
-                    if ET.iselement(document):
-                        for total_count_data in document.findall("./totalCount"):
-                            currency_exchange_dict["total_count"] = total_count_data.text
-                        items_list = []
-                        for items in document.findall("./items"):
-                            item_dict = {}
-                            for item_detail in items.iter():
-                                if item_detail.tag != "UNIXTIME":
-                                    item_dict[item_detail.tag] = item_detail.text
-                                elif item_detail.tag == "UNIXTIME":
-                                    for unixtime in item_detail.iter():
-                                        number_long = {unixtime.tag: unixtime.text}
-                                    item_dict["UNIXTIME"] = number_long
-
-                            items_list.append(item_dict)
-                        currency_exchange_dict["items"] = items_list
-                return currency_exchange_dict
-
-        except HTTPError as e:
-            return r.raise_for_status()
+            # r = self._s.request(method=self.service_method, url=url)
+            # return json.loads(r.content)
+            return requests.get(url).json()
+        # except requests.exceptions.HTTPError as e:
+        #     return r.raise_for_status()
 
         finally:
             pass
@@ -144,11 +121,14 @@ class TCMBConnection:
             for item in response_list:
                 for key in item.keys():
                     if key not in ["Tarih", "UNIXTIME"]:
-                        if item.get(key) is None:
+                        if item.get(key) is None or \
+                                item.get(key) == "None" or \
+                                item.get(key) == "null" or \
+                                item.get(key) == "Null":
                             exchange_rate_date = datetime.datetime.strptime(item.get("Tarih"),
                                                                             self.tcmb_date_format).date() - self.a_day
-                            self.get_exchange_rate_for_single_date_and_currency("bie_dkdovizgn", key,
-                                                                                exchange_rate_date)
+                            exchange_rate = self.get_exchange_rate_for_single_date_and_currency("bie_dkdovizgn", key,
+                                                                                                exchange_rate_date)
                         else:
                             exchange_rate = item.get(key)
 
