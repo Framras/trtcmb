@@ -56,7 +56,8 @@ class TCMBConnection:
             exchange_rate_day = tcmb_start_date + datetime.timedelta(days=i)
             for currency in currency_list:
                 if currency.get("currency_name") != "TRY" and \
-                        frappe.db.count(doctype=TCMBCurrencyExchange.doctype, filters={
+                        not frappe.db.exists({
+                            "doctype": TCMBCurrencyExchange.doctype,
                             "date": exchange_rate_day,
                             "from_currency": currency.get("currency_name"),
                             "to_currency": TCMBCurrencyExchange.to_currency,
@@ -67,7 +68,8 @@ class TCMBConnection:
                                                       for_date=exchange_rate_day,
                                                       purpose="for_buying"))
                 if currency.get("currency_name") != "TRY" and \
-                        frappe.db.count(doctype=TCMBCurrencyExchange.doctype, filters={
+                        not frappe.db.exists({
+                            "doctype": TCMBCurrencyExchange.doctype,
                             "date": exchange_rate_day,
                             "from_currency": currency.get("currency_name"),
                             "to_currency": TCMBCurrencyExchange.to_currency,
