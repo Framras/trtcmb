@@ -10,33 +10,19 @@ class TCMBConnection:
     def __init__(self):
         self._s = requests.Session()
         self.a_day = datetime.timedelta(days=1)
-        self.service_method = "GET"
-        self.try_code = "YTL"
-        self.tcmb_date_format = TCMBCurrencyExchange.tcmb_date_format
-        self.type = TCMBCurrency.type
-        self.doctype = TCMBCurrency.doctype
         self.series_separator = "-"
         self.inner_separator = "."
-        self.response_separator = TCMBCurrencyExchange.response_separator
-        self.buying_code = TCMBCurrencyExchange.buying_code
-        self.selling_code = TCMBCurrencyExchange.selling_code
         self.series_prefix = "/series="
         self.start_date_prefix = "&startDate="
         self.end_date_prefix = "&endDate="
-        self.type_prefix = TCMBCurrency.type_prefix
-        self.key_prefix = TCMBCurrency.key_prefix
-        self.company_doctype = TCMBCurrency.company_doctype
-        self.integration_setting_doctype = TCMBCurrency.integration_setting_doctype
-        self.company_setting_doctype = TCMBCurrency.company_setting_doctype
         # global settings
-        self.service_path = TCMBCurrency.service_path
-        self.company = frappe.defaults.get_user_default(self.company_doctype)
+        self.company = frappe.defaults.get_user_default(TCMBCurrency.company_doctype)
         # company settings
-        self.enable = frappe.db.get_value(self.company_setting_doctype, self.company, "enable")
-        self.key = frappe.db.get_value(self.company_setting_doctype, self.company, "key")
-        self.start_date = frappe.db.get_value(self.company_setting_doctype, self.company, "start_date")
-        self.last_updated = frappe.db.get_value(self.company_setting_doctype, self.company, "last_updated")
-        self.date_of_establishment = frappe.db.get_value(self.company_doctype, self.company,
+        self.enable = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "enable")
+        self.key = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "key")
+        self.start_date = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "start_date")
+        self.last_updated = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "last_updated")
+        self.date_of_establishment = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company,
                                                          "date_of_establishment")
 
     def get_exchange_rates_for_enabled_currencies(self, datagroup_code: str):
@@ -91,12 +77,12 @@ class TCMBConnection:
         url = ""
         # Exchange, rates, Daily, (Converted, to, TRY)
         series = self.series_prefix + self.series_separator.join(series_list)
-        tcmb_start_date = self.start_date_prefix + for_start_date.strftime(self.tcmb_date_format)
-        tcmb_end_date = self.end_date_prefix + for_end_date.strftime(self.tcmb_date_format)
-        return_type = self.type_prefix + self.type
-        key = self.key_prefix + self.key
+        tcmb_start_date = self.start_date_prefix + for_start_date.strftime(TCMBCurrencyExchange.tcmb_date_format)
+        tcmb_end_date = self.end_date_prefix + for_end_date.strftime(TCMBCurrencyExchange.tcmb_date_format)
+        return_type = TCMBCurrency.type_prefix + TCMBCurrency.response_type
+        key = TCMBCurrency.key_prefix + self.key
 
-        url = self.service_path + series + tcmb_start_date + tcmb_end_date + return_type + key
+        url = TCMBCurrency.service_path + series + tcmb_start_date + tcmb_end_date + return_type + key
 
         # try:
         # r = self._s.request(method=self.service_method, url=url)
@@ -107,20 +93,21 @@ class TCMBConnection:
 
     def get_single_exchange_rate(self, currency: str, for_date: datetime.date, purpose: str):
         if purpose == "for_buying":
-            currency_serie = self.inner_separator.join(
-                ["TP", "DK", currency, self.buying_code])
+            currency_series_data = self.inner_separator.join(
+                ["TP", "DK", currency, TCMBCurrencyExchange.buying_code])
         elif purpose == "for_selling":
-            currency_serie = self.inner_separator.join(
-                ["TP", "DK", currency, self.selling_code])
-        serie_as_list = [currency_serie]
+            currency_series_data = self.inner_separator.join(
+                ["TP", "DK", currency, TCMBCurrencyExchange.selling_code])
+        serie_as_list = [currency_series_data]
         # Exchange, rates, Daily, (Converted, to, TRY)
         response_dict = self.connect(datagroup_code="bie_dkdovizgn", series_list=serie_as_list,
                                      for_start_date=for_date, for_end_date=for_date)
         if response_dict.get("totalCount") == 1:
-            currency_response = currency_serie.replace(self.inner_separator, self.response_separator)
+            currency_response = currency_series_data.replace(self.inner_separator,
+                                                             TCMBCurrencyExchange.response_separator)
             if response_dict.get("items")[0].get(currency_response) is None:
                 exchange_rate_date = datetime.datetime.strptime(response_dict.get("items")[0].get("Tarih"),
-                                                                self.tcmb_date_format).date() - self.a_day
+                                                                TCMBCurrencyExchange.tcmb_date_format).date() - self.a_day
                 new_dict = self.get_single_exchange_rate(currency, exchange_rate_date, purpose)
                 response_dict["items"][0][currency_response] = new_dict["items"][0][currency_response]
             else:
