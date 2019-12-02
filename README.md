@@ -23,10 +23,6 @@ Checks Currency Exchange rates in ERPNext and skips updates. Inserts new buying 
 
 Go to your folder containing bench and run:
 
-### Installation
-
-Go to your folder containing bench and run:
-
 bench get-app https://github.com/Framras/trtcmb.git
 
 At the same prompt run:
