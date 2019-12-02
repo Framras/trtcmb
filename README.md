@@ -38,6 +38,7 @@ git pull https://github.com/Framras/trtcmb.git
 Go to your folder containing bench and run:
 
 bench build
+
 bench migrate
 
 #### License
