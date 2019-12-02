@@ -84,12 +84,7 @@ class TCMBConnection:
 
         url = TCMBCurrency.service_path + series + tcmb_start_date + tcmb_end_date + return_type + key
 
-        # try:
-        # r = self._s.request(method=self.service_method, url=url)
-        # return json.loads(r.content)
         return requests.get(url).json()
-        # except requests.exceptions.HTTPError as e:
-        #     return r.raise_for_status()
 
     def get_single_exchange_rate(self, currency: str, for_date: datetime.date, purpose: str):
         if purpose == "for_buying":
@@ -107,7 +102,8 @@ class TCMBConnection:
                                                              TCMBCurrencyExchange.response_separator)
             if response_dict.get("items")[0].get(currency_response) is None:
                 exchange_rate_date = datetime.datetime.strptime(response_dict.get("items")[0].get("Tarih"),
-                                                                TCMBCurrencyExchange.tcmb_date_format).date() - self.a_day
+                                                                TCMBCurrencyExchange.tcmb_date_format).date() - \
+                                     self.a_day
                 new_dict = self.get_single_exchange_rate(currency, exchange_rate_date, purpose)
                 response_dict["items"][0][currency_response] = new_dict["items"][0][currency_response]
             else:
