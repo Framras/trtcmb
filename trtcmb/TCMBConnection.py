@@ -13,8 +13,8 @@ class TCMBConnection:
         self.service_method = "GET"
         self.try_code = "YTL"
         self.tcmb_date_format = TCMBCurrencyExchange.tcmb_date_format
-        self.type = "json"
-        self.doctype = "Currency"
+        self.type = TCMBCurrency.type
+        self.doctype = TCMBCurrency.doctype
         self.series_separator = "-"
         self.inner_separator = "."
         self.response_separator = TCMBCurrencyExchange.response_separator
@@ -23,13 +23,13 @@ class TCMBConnection:
         self.series_prefix = "/series="
         self.start_date_prefix = "&startDate="
         self.end_date_prefix = "&endDate="
-        self.type_prefix = "&type="
-        self.key_prefix = "&key="
-        self.company_doctype = "Company"
-        self.integration_setting_doctype = "TR TCMB EVDS Integration Setting"
-        self.company_setting_doctype = "TR TCMB EVDS Integration Company Setting"
+        self.type_prefix = TCMBCurrency.type_prefix
+        self.key_prefix = TCMBCurrency.key_prefix
+        self.company_doctype = TCMBCurrency.company_doctype
+        self.integration_setting_doctype = TCMBCurrency.integration_setting_doctype
+        self.company_setting_doctype = TCMBCurrency.company_setting_doctype
         # global settings
-        self.service_path = frappe.db.get_single_value(self.integration_setting_doctype, "service_path")
+        self.service_path = TCMBCurrency.service_path
         self.company = frappe.defaults.get_user_default(self.company_doctype)
         # company settings
         self.enable = frappe.db.get_value(self.company_setting_doctype, self.company, "enable")
@@ -46,7 +46,6 @@ class TCMBConnection:
         else:
             pass
         currency_list = TCMBCurrency.get_list_of_enabled_currencies()
-
         if self.start_date is not None and \
                 self.start_date > datetime.date(1950, 1, 2):
             tcmb_start_date = self.start_date
@@ -99,15 +98,12 @@ class TCMBConnection:
 
         url = self.service_path + series + tcmb_start_date + tcmb_end_date + return_type + key
 
-        try:
-            # r = self._s.request(method=self.service_method, url=url)
-            # return json.loads(r.content)
-            return requests.get(url).json()
+        # try:
+        # r = self._s.request(method=self.service_method, url=url)
+        # return json.loads(r.content)
+        return requests.get(url).json()
         # except requests.exceptions.HTTPError as e:
         #     return r.raise_for_status()
-
-        finally:
-            pass
 
     def get_single_exchange_rate(self, currency: str, for_date: datetime.date, purpose: str):
         if purpose == "for_buying":
