@@ -32,8 +32,7 @@ class TCMBConnection:
         else:
             pass
         currency_list = TCMBCurrency.get_list_of_enabled_currencies()
-        if (self.start_date is not None and \
-                self.start_date > datetime.date(1950, 1, 2)):
+        if self.start_date is not None and self.start_date > datetime.date(1950, 1, 2):
             tcmb_start_date = self.start_date
 
         delta = datetime.date.today() - tcmb_start_date
