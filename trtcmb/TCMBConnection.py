@@ -22,7 +22,7 @@ class TCMBConnection:
         self.key = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "key")
         self.start_date = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "start_date")
         self.last_updated = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "last_updated")
-        self.date_of_establishment = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company,
+        self.date_of_establishment = frappe.db.get_value(TCMBCurrency.company_doctype, self.company,
                                                          "date_of_establishment")
 
     def get_exchange_rates_for_enabled_currencies(self, datagroup_code: str):
@@ -32,8 +32,8 @@ class TCMBConnection:
         else:
             pass
         currency_list = TCMBCurrency.get_list_of_enabled_currencies()
-        if self.start_date is not None and \
-                self.start_date > datetime.date(1950, 1, 2):
+        if (self.start_date is not None and \
+                self.start_date > datetime.date(1950, 1, 2)):
             tcmb_start_date = self.start_date
 
         delta = datetime.date.today() - tcmb_start_date
