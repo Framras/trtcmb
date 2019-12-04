@@ -12,12 +12,13 @@ Each ERPNext Company should define their integration code, integration start dat
 
 Checks currencies enabled in your ERPNext instance against the currencies announced by TCMB. The currency exchange rates are legally accepted rates.
 
-Checks Currency Exchange rates in ERPNext and skips updates. Inserts new buying and selling Currency Exchange rates for enabled currencies for dates starting from integration start date. Rates are received from TCMB.
+Checks existing Currency Exchange rates in ERPNext against TCMB rates and updates with rates are received from TCMB.
+
+Can handle for updates beyond 30 days' data via background jobs
 
 ### Known Issues
 
-* for updates of more than 30 days' data, a database lock timeout message is received. So, it is advised to initiate the data backwards adding another month on each step.
-* you need first to delete the Currency Exchange entries in your ERPNext system if you want to refresh them from TCMB.
+* please report any issues you encounter
 
 ### Installation
 
