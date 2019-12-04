@@ -30,7 +30,7 @@ class TCMBCurrencyExchange:
             elif key_list[3] == cls.buying_code:
                 for_buying = 1
             # check if record exists by filters
-            if not frappe.db.exists({
+            if frappe.db.exists({
                 "doctype": cls.doctype,
                 "date": exchange_rate_date,
                 "from_currency": from_currency,
@@ -38,15 +38,6 @@ class TCMBCurrencyExchange:
                 "for_buying": for_buying,
                 "for_selling": for_selling
             }):
-                newdoc = frappe.new_doc(cls.doctype)
-                newdoc.date = exchange_rate_date
-                newdoc.from_currency = from_currency
-                newdoc.to_currency = cls.to_currency
-                newdoc.for_buying = for_buying
-                newdoc.for_selling = for_selling
-                newdoc.exchange_rate = flt(data_dict.get(key))
-                return newdoc.insert()
-            else:
                 frdoc_list = frappe.db.get_list(doctype=cls.doctype, filters={
                     "date": exchange_rate_date,
                     "from_currency": from_currency,
@@ -55,5 +46,19 @@ class TCMBCurrencyExchange:
                     "for_selling": for_selling
                 })
                 frdoc = frappe.get_doc(cls.doctype, frdoc_list[0].get("name"))
-                frdoc.exchange_rate = flt(data_dict.get(key))
-                return frdoc.save()
+                if frdoc.exchange_rate != flt(data_dict.get(key)):
+                    frdoc.exchange_rate = flt(data_dict.get(key))
+                    return frappe.enqueue(frdoc.save, queue="short", timeout=None, event=None,
+                                          is_async=False, job_name=None)
+                else:
+                    pass
+            else:
+                newdoc = frappe.new_doc(cls.doctype)
+                newdoc.date = exchange_rate_date
+                newdoc.from_currency = from_currency
+                newdoc.to_currency = cls.to_currency
+                newdoc.for_buying = for_buying
+                newdoc.for_selling = for_selling
+                newdoc.exchange_rate = flt(data_dict.get(key))
+                return frappe.enqueue(newdoc.insert, queue="short", timeout=None, event=None,
+                                      is_async=False, job_name=None)

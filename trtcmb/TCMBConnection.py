@@ -22,8 +22,7 @@ class TCMBConnection:
         self.key = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "key")
         self.start_date = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "start_date")
         self.last_updated = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "last_updated")
-        self.date_of_establishment = frappe.db.get_value(TCMBCurrency.company_doctype, self.company,
-                                                         "date_of_establishment")
+        self.enable_update = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "enable_update")
 
     def get_exchange_rates_for_enabled_currencies(self, datagroup_code: str):
         if datagroup_code != "bie_dkdovizgn" or self.enable != 1:
@@ -39,26 +38,40 @@ class TCMBConnection:
         for i in range(delta.days + 1):
             exchange_rate_day = tcmb_start_date + datetime.timedelta(days=i)
             for currency in currency_list:
-                if currency.get("currency_name") != "TRY" and \
-                        not frappe.db.exists({
-                            "doctype": TCMBCurrencyExchange.doctype,
-                            "date": exchange_rate_day,
-                            "from_currency": currency.get("currency_name"),
-                            "to_currency": TCMBCurrencyExchange.to_currency,
-                            "for_buying": 1
-                        }):
+                if self.enable_update == 0:
+                    if currency.get("currency_name") != "TRY" and \
+                            frappe.db.exists({
+                                "doctype": TCMBCurrencyExchange.doctype,
+                                "date": exchange_rate_day,
+                                "from_currency": currency.get("currency_name"),
+                                "to_currency": TCMBCurrencyExchange.to_currency,
+                                "for_buying": 1
+                            }):
+                        continue
+                    else:
+                        TCMBCurrencyExchange.commit_single_currency_exchange_rate(
+                            self.get_single_exchange_rate(currency=currency.get("currency_name"),
+                                                          for_date=exchange_rate_day,
+                                                          purpose="for_buying"))
+                    if currency.get("currency_name") != "TRY" and \
+                            frappe.db.exists({
+                                "doctype": TCMBCurrencyExchange.doctype,
+                                "date": exchange_rate_day,
+                                "from_currency": currency.get("currency_name"),
+                                "to_currency": TCMBCurrencyExchange.to_currency,
+                                "for_selling": 1
+                            }):
+                        continue
+                    else:
+                        TCMBCurrencyExchange.commit_single_currency_exchange_rate(
+                            self.get_single_exchange_rate(currency=currency.get("currency_name"),
+                                                          for_date=exchange_rate_day,
+                                                          purpose="for_selling"))
+                elif self.enable_update == 1:
                     TCMBCurrencyExchange.commit_single_currency_exchange_rate(
                         self.get_single_exchange_rate(currency=currency.get("currency_name"),
                                                       for_date=exchange_rate_day,
                                                       purpose="for_buying"))
-                if currency.get("currency_name") != "TRY" and \
-                        not frappe.db.exists({
-                            "doctype": TCMBCurrencyExchange.doctype,
-                            "date": exchange_rate_day,
-                            "from_currency": currency.get("currency_name"),
-                            "to_currency": TCMBCurrencyExchange.to_currency,
-                            "for_selling": 1
-                        }):
                     TCMBCurrencyExchange.commit_single_currency_exchange_rate(
                         self.get_single_exchange_rate(currency=currency.get("currency_name"),
                                                       for_date=exchange_rate_day,

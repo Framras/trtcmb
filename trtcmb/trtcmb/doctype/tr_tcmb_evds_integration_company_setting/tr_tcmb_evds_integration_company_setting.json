@@ -9,6 +9,8 @@
     "enable",
     "key",
     "start_date",
+    "column_break_5",
+    "enable_update",
     "initiate_integration",
     "last_updated"
   ],
@@ -49,9 +51,19 @@
       "fieldname": "last_updated",
       "fieldtype": "Date",
       "label": "Last Updated Date"
+    },
+    {
+      "fieldname": "column_break_5",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": "0",
+      "fieldname": "enable_update",
+      "fieldtype": "Check",
+      "label": "Enable Update"
     }
   ],
-  "modified": "2019-12-01 13:04:40.579714",
+  "modified": "2019-12-04 12:29:51.717722",
   "modified_by": "Administrator",
   "module": "Trtcmb",
   "name": "TR TCMB EVDS Integration Company Setting",
