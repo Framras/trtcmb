@@ -1,6 +1,5 @@
 import frappe
 import requests
-import json
 
 
 class TCMBCurrency:
@@ -12,10 +11,8 @@ class TCMBCurrency:
     key_prefix = "&key="
     type_prefix = "&type="
     datagroup_code = "bie_dkdovizgn"
-
     company_setting_doctype = "TR TCMB EVDS Integration Company Setting"
     integration_setting_doctype = "TR TCMB EVDS Integration Setting"
-
     service_path = frappe.db.get_single_value(integration_setting_doctype, "service_path")
 
     @classmethod
@@ -44,5 +41,4 @@ class TCMBCurrency:
         for currency in currency_list:
             if not currency.get("currency_name") in tcmb_currency_list:
                 currency_list.remove(currency)
-
         return currency_list

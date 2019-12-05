@@ -28,12 +28,9 @@ class TCMBConnection:
         if datagroup_code != "bie_dkdovizgn" or self.enable != 1:
             # should be error
             return False
-        else:
-            pass
         currency_list = TCMBCurrency.get_list_of_enabled_currencies()
         if self.start_date is not None and self.start_date > datetime.date(1950, 1, 2):
             tcmb_start_date = self.start_date
-
         delta = datetime.date.today() - tcmb_start_date
         for i in range(delta.days + 1):
             exchange_rate_day = tcmb_start_date + datetime.timedelta(days=i)
@@ -76,7 +73,6 @@ class TCMBConnection:
                         self.get_single_exchange_rate(currency=currency.get("currency_name"),
                                                       for_date=exchange_rate_day,
                                                       purpose="for_selling"))
-
         return datetime.datetime.today().date()
 
     def connect(self, datagroup_code: str, series_list: list, for_start_date: datetime.date,
@@ -84,8 +80,6 @@ class TCMBConnection:
         if datagroup_code != "bie_dkdovizgn" or self.enable != 1:
             # should be error
             return False
-        else:
-            pass
         url = ""
         # Exchange, rates, Daily, (Converted, to, TRY)
         series = self.series_prefix + self.series_separator.join(series_list)
@@ -93,9 +87,7 @@ class TCMBConnection:
         tcmb_end_date = self.end_date_prefix + for_end_date.strftime(TCMBCurrencyExchange.tcmb_date_format)
         return_type = TCMBCurrency.type_prefix + TCMBCurrency.response_type
         key = TCMBCurrency.key_prefix + self.key
-
         url = TCMBCurrency.service_path + series + tcmb_start_date + tcmb_end_date + return_type + key
-
         return requests.get(url).json()
 
     def get_single_exchange_rate(self, currency: str, for_date: datetime.date, purpose: str):
@@ -118,7 +110,4 @@ class TCMBConnection:
                                      self.a_day
                 new_dict = self.get_single_exchange_rate(currency, exchange_rate_date, purpose)
                 response_dict["items"][0][currency_response] = new_dict["items"][0][currency_response]
-            else:
-                pass
-
         return response_dict

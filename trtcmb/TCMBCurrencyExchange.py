@@ -50,8 +50,6 @@ class TCMBCurrencyExchange:
                     frdoc.exchange_rate = flt(data_dict.get(key))
                     return frappe.enqueue(frdoc.save, queue="short", timeout=None, event=None,
                                           is_async=False, job_name=None)
-                else:
-                    pass
             else:
                 newdoc = frappe.new_doc(cls.doctype)
                 newdoc.date = exchange_rate_date
