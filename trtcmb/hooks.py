@@ -90,23 +90,29 @@ app_license = "MIT"
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"trtcmb.tasks.all"
-# 	],
-# 	"daily": [
-# 		"trtcmb.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"trtcmb.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"trtcmb.tasks.weekly"
-# 	]
-# 	"monthly": [
-# 		"trtcmb.tasks.monthly"
-# 	]
-# }
+scheduler_events = {
+    # 	"all": [
+    # 		"trtcmb.tasks.all"
+    # 	],
+    # 	"daily": [
+    # 		"trtcmb.tasks.daily"
+    # 	],
+    # 	"hourly": [
+    # 		"trtcmb.tasks.hourly"
+    # 	],
+    # 	"weekly": [
+    # 		"trtcmb.tasks.weekly"
+    # 	]
+    # 	"monthly": [
+    # 		"trtcmb.tasks.monthly"
+    # 	]
+    "cron": {
+        "15 38 * * *":
+            [
+                "trtcmb.api.initiate_currency_exchange_rates"
+            ]
+    }
+}
 
 # Testing
 # -------
