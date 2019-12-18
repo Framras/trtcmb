@@ -109,7 +109,7 @@ scheduler_events = {
     "cron": {
         "15 38 * * *":
             [
-                "trtcmb.api.initiate_currency_exchange_rates"
+                "trtcmb.tasks.every_day_at_15_38"
             ]
     }
 }
