@@ -107,7 +107,7 @@ scheduler_events = {
     # 		"trtcmb.tasks.monthly"
     # 	]
     "cron": {
-        "15 38 * * *":
+        "38 15 * * *":
             [
                 "trtcmb.tasks.every_day_at_15_38"
             ]
