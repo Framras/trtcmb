@@ -1,0 +1,47 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "creation": "2022-05-20 22:35:51.632175",
+ "disable_prepared_report": 0,
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letter_head": "Standard",
+ "modified": "2022-05-21 12:04:02.726591",
+ "modified_by": "Administrator",
+ "module": "Trtcmb",
+ "name": "Account Balance Currency Rate",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "query": "SELECT\n  c.name AS Company,\n  a.account_number AS 'Account Number',\n  a.account_name AS 'Account Name',\n  SUM(g.debit_in_account_currency)-SUM(g.credit_in_account_currency) AS 'Balance (Account)',\n  a.account_currency AS 'Account Currency',\n  SUM(g.debit)-SUM(g.credit) AS 'Balance (Company)',\n  c.default_currency AS 'Company Currency',\n  (SUM(g.debit)-SUM(g.credit))/(SUM(g.debit_in_account_currency)-SUM(g.credit_in_account_currency)) AS 'Account Exchange Rate'\nFROM\n  tabCompany AS c INNER JOIN tabAccount AS a ON c.name=a.company\n  INNER JOIN `tabGL Entry` AS g ON a.name=g.account\nWHERE\n  a.account_currency <> c.default_currency\nGROUP BY\n  c.name, a.name;",
+ "ref_doctype": "Account",
+ "reference_report": "",
+ "report_name": "Account Balance Currency Rate",
+ "report_type": "Query Report",
+ "roles": [
+  {
+   "role": "Purchase User"
+  },
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "Auditor"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Sales User"
+  },
+  {
+   "role": "Framras Sales User"
+  },
+  {
+   "role": "Employee Self Service"
+  }
+ ]
+}
