@@ -1,0 +1,62 @@
+{
+ "category": "Modules",
+ "charts": [],
+ "creation": "2022-01-14 17:37:27.778062",
+ "developer_mode_only": 0,
+ "disable_user_customization": 0,
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "extends_another_page": 0,
+ "hide_custom": 0,
+ "idx": 0,
+ "is_default": 0,
+ "is_standard": 1,
+ "label": "TR TCMB",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Firma Ayarlar\u0131",
+   "link_to": "TR TCMB EVDS Integration Company Setting",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "TCMB EVDS Entegrasyon Ayarlar\u0131",
+   "link_to": "TR TCMB EVDS Integration Setting",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2022-05-21 12:37:34.784275",
+ "modified_by": "Administrator",
+ "module": "Trtcmb",
+ "name": "TR TCMB",
+ "owner": "tufan.kaynak@framras.com",
+ "pin_to_bottom": 0,
+ "pin_to_top": 0,
+ "shortcuts": [
+  {
+   "doc_view": "",
+   "label": "Firma Ayarlar\u0131",
+   "link_to": "TR TCMB EVDS Integration Company Setting",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "label": "TCMB EVDS Entegrasyon Ayarlar\u0131",
+   "link_to": "TR TCMB EVDS Integration Setting",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "label": "Account Balance Currency Rate",
+   "link_to": "Account Balance Currency Rate",
+   "type": "Report"
+  }
+ ]
+}
