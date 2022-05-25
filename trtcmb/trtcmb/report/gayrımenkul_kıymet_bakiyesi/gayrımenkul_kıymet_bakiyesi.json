@@ -1,0 +1,37 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "creation": "2022-05-25 17:59:32.960519",
+ "disable_prepared_report": 0,
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letter_head": "Standard",
+ "modified": "2022-05-25 19:39:07.811005",
+ "modified_by": "Administrator",
+ "module": "Trtcmb",
+ "name": "Gayr\u0131menkul K\u0131ymet Bakiyesi",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "query": "SELECT kiymet as K\u0131ymet, SUM(kiymet_adet) AS 'Bakiye Adet', FORMAT(kiymet_fiyat * kiymet_adet, 2, 'tr_TR') AS 'Toplam K\u0131ymet'\nFROM `tabJournal Entry`\nWHERE kiymet_adet > 0\nGROUP BY kiymet;",
+ "ref_doctype": "Journal Entry",
+ "report_name": "Gayr\u0131menkul K\u0131ymet Bakiyesi",
+ "report_type": "Query Report",
+ "roles": [
+  {
+   "role": "Auditor"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "Employee Self Service"
+  }
+ ]
+}
