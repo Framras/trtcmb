@@ -1,6 +1,6 @@
 import frappe
-import requests
 import datetime
+import trtcmb.CustomHTTPAdapter
 
 from trtcmb.TCMBCurrency import TCMBCurrency
 from trtcmb.TCMBCurrencyExchange import TCMBCurrencyExchange
@@ -8,7 +8,8 @@ from trtcmb.TCMBCurrencyExchange import TCMBCurrencyExchange
 
 class TCMBConnection:
     def __init__(self):
-        self._s = requests.Session()
+        #        self._s = requests.Session()
+        self._s = trtcmb.CustomHTTPAdapter.get_legacy_session()
         self.a_day = datetime.timedelta(days=1)
         self.series_separator = "-"
         self.inner_separator = "."
@@ -88,7 +89,8 @@ class TCMBConnection:
         return_type = TCMBCurrency.type_prefix + TCMBCurrency.response_type
         key = TCMBCurrency.key_prefix + self.key
         url = TCMBCurrency.service_path + series + tcmb_start_date + tcmb_end_date + return_type + key
-        return requests.get(url).json()
+        #        return requests.get(url).json()
+        return trtcmb.CustomHTTPAdapter.get_legacy_session().get(url).json()
 
     def get_single_exchange_rate(self, currency: str, for_date: datetime.date, purpose: str):
         if purpose == "for_buying":

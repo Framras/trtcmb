@@ -49,7 +49,7 @@ class TCMBCurrencyExchange:
                 if frdoc.exchange_rate != flt(data_dict.get(key)):
                     frdoc.exchange_rate = flt(data_dict.get(key))
                     return frappe.enqueue(frdoc.save, queue="short", timeout=None, event=None,
-                                          is_async=False, job_name=None)
+                                          now=True, job_name=None)
             else:
                 newdoc = frappe.new_doc(cls.doctype)
                 newdoc.date = exchange_rate_date
@@ -59,4 +59,4 @@ class TCMBCurrencyExchange:
                 newdoc.for_selling = for_selling
                 newdoc.exchange_rate = flt(data_dict.get(key))
                 return frappe.enqueue(newdoc.insert, queue="short", timeout=None, event=None,
-                                      is_async=False, job_name=None)
+                                      now=True, job_name=None)
