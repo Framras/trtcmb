@@ -16,7 +16,7 @@
  "name": "Gayr\u0131menkul K\u0131ymet Bakiyesi",
  "owner": "Administrator",
  "prepared_report": 0,
- "query": "SELECT kiymet as K\u0131ymet, SUM(kiymet_adet) AS 'Bakiye Adet', FORMAT(kiymet_fiyat * kiymet_adet, 2, 'tr_TR') AS 'Toplam K\u0131ymet'\nFROM `tabJournal Entry`\nWHERE kiymet_adet > 0\nGROUP BY kiymet;",
+ "query": "SELECT kiymet as K\u0131ymet, SUM(kiymet_adet) AS 'Bakiye Adet', FORMAT(SUM(kiymet_fiyat * kiymet_adet), 2, 'tr_TR') AS 'Toplam K\u0131ymet'\nFROM `tabJournal Entry`\nWHERE kiymet_adet <> 0\nGROUP BY kiymet;",
  "ref_doctype": "Journal Entry",
  "report_name": "Gayr\u0131menkul K\u0131ymet Bakiyesi",
  "report_type": "Query Report",
