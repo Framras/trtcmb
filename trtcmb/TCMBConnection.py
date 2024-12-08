@@ -1,6 +1,8 @@
-import frappe
 import datetime
-import trtcmb.CustomHTTPAdapter
+import time
+
+import frappe
+import requests
 
 from trtcmb.TCMBCurrency import TCMBCurrency
 from trtcmb.TCMBCurrencyExchange import TCMBCurrencyExchange
@@ -8,14 +10,14 @@ from trtcmb.TCMBCurrencyExchange import TCMBCurrencyExchange
 
 class TCMBConnection:
     def __init__(self):
-        #        self._s = requests.Session()
-        #        self._s = trtcmb.CustomHTTPAdapter.get_legacy_session()
         self.a_day = datetime.timedelta(days=1)
         self.series_separator = "-"
         self.inner_separator = "."
         self.series_prefix = "/series="
         self.start_date_prefix = "&startDate="
         self.end_date_prefix = "&endDate="
+        self.datagroup_code = "bie_dkdovizgn"
+        self.sleep_time = 13
         # global settings
         self.company = frappe.defaults.get_user_default(TCMBCurrency.company_doctype)
         # company settings
@@ -26,7 +28,7 @@ class TCMBConnection:
         self.enable_update = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "enable_update")
 
     def get_exchange_rates_for_enabled_currencies(self, datagroup_code: str):
-        if datagroup_code != "bie_dkdovizgn" or self.enable != 1:
+        if datagroup_code != self.datagroup_code or self.enable != 1:
             # should be error
             return False
         currency_list = TCMBCurrency.get_list_of_enabled_currencies()
@@ -78,7 +80,7 @@ class TCMBConnection:
 
     def connect(self, datagroup_code: str, series_list: list, for_start_date: datetime.date,
                 for_end_date: datetime.date):
-        if datagroup_code != "bie_dkdovizgn" or self.enable != 1:
+        if datagroup_code != self.datagroup_code or self.enable != 1:
             # should be error
             return False
         # Exchange, rates, Daily, (Converted, to, TRY)
@@ -87,8 +89,9 @@ class TCMBConnection:
         tcmb_end_date = self.end_date_prefix + for_end_date.strftime(TCMBCurrencyExchange.tcmb_date_format)
         return_type = TCMBCurrency.type_prefix + TCMBCurrency.response_type
         url = TCMBCurrency.service_path + series + tcmb_start_date + tcmb_end_date + return_type
-        #        return requests.get(url).json()
-        return trtcmb.CustomHTTPAdapter.get_legacy_session().get(url=url, headers={'key': self.key}).json()
+        time.sleep(self.sleep_time)
+        print('Request: '+ url + ' at time: ' + str(time.strftime('%c')))
+        return requests.get(url, headers={'key': self.key}).json()
 
     def get_single_exchange_rate(self, currency: str, for_date: datetime.date, purpose: str):
         # dummy assignment
@@ -99,9 +102,9 @@ class TCMBConnection:
         elif purpose == "for_selling":
             currency_series_data = self.inner_separator.join(
                 ["TP", "DK", currency, TCMBCurrencyExchange.selling_code])
-        serie_as_list = [currency_series_data]
+        series_as_list = [currency_series_data]
         # Exchange, rates, Daily, (Converted, to, TRY)
-        response_dict = self.connect(datagroup_code="bie_dkdovizgn", series_list=serie_as_list,
+        response_dict = self.connect(datagroup_code=self.datagroup_code, series_list=series_as_list,
                                      for_start_date=for_date, for_end_date=for_date)
         if response_dict.get("totalCount") == 1:
             currency_response = currency_series_data.replace(self.inner_separator,

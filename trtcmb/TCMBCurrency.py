@@ -1,5 +1,5 @@
 import frappe
-import trtcmb.CustomHTTPAdapter
+import requests
 
 
 class TCMBCurrency:
@@ -8,7 +8,6 @@ class TCMBCurrency:
     response_type = "json"
     serielist_path = "/serieList"
     code_prefix = "/code="
-    # key_prefix = "&key="
     type_prefix = "&type="
     datagroup_code = "bie_dkdovizgn"
     company_setting_doctype = "TR TCMB EVDS Integration Company Setting"
@@ -26,11 +25,9 @@ class TCMBCurrency:
         # Exchange, rates, Daily, (Converted, to, TRY)
         code = cls.code_prefix + cls.datagroup_code
         return_type = cls.type_prefix + cls.response_type
-        # key = cls.key_prefix + key
         url = cls.service_path + cls.serielist_path + code + return_type
         # get TCMB enabled currencies
-        # tcmb_data_series = requests.get(url).json()
-        tcmb_data_series = trtcmb.CustomHTTPAdapter.get_legacy_session().get(url, headers={'key': key}).json()
+        tcmb_data_series = requests.get(url, headers={'key': key}).json()
         # extract and compare
         tcmb_currency_list = []
         for tcmb_data_serie in tcmb_data_series:
