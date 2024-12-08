@@ -17,7 +17,7 @@ class TCMBConnection:
         self.start_date_prefix = "&startDate="
         self.end_date_prefix = "&endDate="
         self.datagroup_code = "bie_dkdovizgn"
-        self.sleep_time = 13
+        self.sleep_time = 10
         # global settings
         self.company = frappe.defaults.get_user_default(TCMBCurrency.company_doctype)
         # company settings
