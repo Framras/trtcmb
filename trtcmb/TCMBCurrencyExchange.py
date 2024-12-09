@@ -16,11 +16,11 @@ class TCMBCurrencyExchange:
     to_currency = "TRY"
 
     @classmethod
-    def commit_single_currency_exchange_rate(cls, tcmb_data: dict):
-        data_dict = dict(tcmb_data.get("items")[0])
-        exchange_rate_date = datetime.datetime.strptime(data_dict.pop(cls.tcmb_date_key), cls.tcmb_date_format).date()
-        data_dict.pop(cls.tcmb_strip_key)
-        for key in data_dict.keys():
+    def commit_single_currency_exchange_rate(cls, tcmb_data: dict, enable_update: int):
+        # data_dict = dict(tcmb_data.get("items")[0])
+        exchange_rate_date = datetime.datetime.strptime(tcmb_data.pop(cls.tcmb_date_key), cls.tcmb_date_format).date()
+        # tcmb_data.pop(cls.tcmb_strip_key)
+        for key in tcmb_data.keys():
             for_selling = 0
             for_buying = 0
             key_list = str(key).split(cls.response_separator)
@@ -46,10 +46,11 @@ class TCMBCurrencyExchange:
                     "for_selling": for_selling
                 })
                 frdoc = frappe.get_doc(cls.doctype, frdoc_list[0].get("name"))
-                if frdoc.exchange_rate != flt(data_dict.get(key)):
-                    frdoc.exchange_rate = flt(data_dict.get(key))
-                    return frappe.enqueue(frdoc.save, queue="short", timeout=None, event=None,
-                                          now=True, job_name=None)
+                if enable_update == 1:
+                    if frdoc.exchange_rate != flt(tcmb_data.get(key)):
+                        frdoc.exchange_rate = flt(tcmb_data.get(key))
+                        return frappe.enqueue(frdoc.save, queue="short", timeout=None, event=None,
+                                              now=True, job_name=None)
             else:
                 newdoc = frappe.new_doc(cls.doctype)
                 newdoc.date = exchange_rate_date
@@ -57,6 +58,6 @@ class TCMBCurrencyExchange:
                 newdoc.to_currency = cls.to_currency
                 newdoc.for_buying = for_buying
                 newdoc.for_selling = for_selling
-                newdoc.exchange_rate = flt(data_dict.get(key))
+                newdoc.exchange_rate = flt(tcmb_data.get(key))
                 return frappe.enqueue(newdoc.insert, queue="short", timeout=None, event=None,
                                       now=True, job_name=None)
