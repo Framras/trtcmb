@@ -1,5 +1,4 @@
 import datetime
-import time
 
 import frappe
 import requests
@@ -102,7 +101,7 @@ class TCMBConnection:
                 reference_date = currency_tuple.pop("Tarih")
                 for tuple_key in list(currency_tuple):
                     reference_dict[reference_date + tuple_key] = currency_tuple.get(tuple_key)
-                   if currency_tuple.get(tuple_key) is None:
+                    if currency_tuple.get(tuple_key) is None:
                         exchange_rate_date = datetime.datetime.strptime(reference_date,
                                                                         TCMBCurrencyExchange.tcmb_date_format).date() - \
                                              self.a_day
@@ -115,13 +114,13 @@ class TCMBConnection:
                         if tcmb_series_split[3] == TCMBCurrencyExchange.selling_code:
                             purpose = "for_selling"
                         if reference_dict.get(
-                            datetime.datetime.strftime(exchange_rate_date, '%d-%m-%Y') + tuple_key) is None:
+                                datetime.datetime.strftime(exchange_rate_date, '%d-%m-%Y') + tuple_key) is None:
                             new_dict = self.get_single_exchange_rate(tcmb_series_split[2], exchange_rate_date,
                                                                      purpose=purpose)
-                            currency_tuple[tuple_key]=new_dict["items"][0][tuple_key]
+                            currency_tuple[tuple_key] = new_dict["items"][0][tuple_key]
                         else:
-                            currency_tuple[tuple_key]=reference_dict.get(
-                            datetime.datetime.strftime(exchange_rate_date, '%d-%m-%Y') + tuple_key)
-                    currency_tuple[TCMBCurrencyExchange.tcmb_date_key]=reference_date
+                            currency_tuple[tuple_key] = reference_dict.get(
+                                datetime.datetime.strftime(exchange_rate_date, '%d-%m-%Y') + tuple_key)
+                currency_tuple[TCMBCurrencyExchange.tcmb_date_key] = reference_date
                 return_list.append(currency_tuple)
         return return_list
