@@ -129,6 +129,6 @@ class TCMBConnection:
                         else:
                             currency_tuple[tuple_key]=reference_dict.get(
                             datetime.datetime.strftime(exchange_rate_date, '%d-%m-%Y') + tuple_key)
-                currency_tuple[TCMBCurrencyExchange.tcmb_date_key]=reference_date
-                return_list.append(currency_tuple)
+                    currency_tuple[TCMBCurrencyExchange.tcmb_date_key]=reference_date
+                    return_list.append(currency_tuple)
         return return_list
