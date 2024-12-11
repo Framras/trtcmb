@@ -18,8 +18,6 @@ class TCMBConnection:
         self.start_date_prefix = "&startDate="
         self.end_date_prefix = "&endDate="
         self.datagroup_code = "bie_dkdovizgn"
-        # integration_setting_doctype = "TR TCMB EVDS Integration Setting"
-        # self.sleep_time = frappe.db.get_single_value(integration_setting_doctype, "custom_sorgular_arasi_zaman")
         # global settings
         self.company = frappe.defaults.get_user_default(TCMBCurrency.company_doctype)
         # company settings
@@ -58,7 +56,6 @@ class TCMBConnection:
         tcmb_end_date = self.end_date_prefix + for_end_date.strftime(TCMBCurrencyExchange.tcmb_date_format)
         return_type = TCMBCurrency.type_prefix + TCMBCurrency.response_type
         url = TCMBCurrency.service_path + series + tcmb_start_date + tcmb_end_date + return_type
-        # time.sleep(self.sleep_time)
         return requests.get(url, headers={'key': self.key}).json()
 
     def get_single_exchange_rate(self, currency: str, for_date: datetime.date, purpose: str):
@@ -88,11 +85,9 @@ class TCMBConnection:
     def get_exchange_rates(self, currency_list: list, from_date: datetime.date, to_date: datetime.date):
         # dummy assignment
         currency_series_as_list = list()
-        # if purpose == "for_buying":
         for currency in currency_list:
             currency_series_as_list.append(self.inner_separator.join(
                 ["TP", "DK", currency.get("currency_name"), TCMBCurrencyExchange.buying_code]))
-            # elif purpose == "for_selling":
             currency_series_as_list.append(self.inner_separator.join(
                 ["TP", "DK", currency.get("currency_name"), TCMBCurrencyExchange.selling_code]))
         # Exchange, rates, Daily, (Converted, to, TRY)
@@ -107,9 +102,7 @@ class TCMBConnection:
                 reference_date = currency_tuple.pop("Tarih")
                 for tuple_key in list(currency_tuple):
                     reference_dict[reference_date + tuple_key] = currency_tuple.get(tuple_key)
-                    # response_currency = tuple_key.replace(TCMBCurrencyExchange.response_separator,
-                    #                                         self.inner_separator)
-                    if currency_tuple.get(tuple_key) is None:
+                   if currency_tuple.get(tuple_key) is None:
                         exchange_rate_date = datetime.datetime.strptime(reference_date,
                                                                         TCMBCurrencyExchange.tcmb_date_format).date() - \
                                              self.a_day

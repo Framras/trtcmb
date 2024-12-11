@@ -17,9 +17,7 @@ class TCMBCurrencyExchange:
 
     @classmethod
     def commit_single_currency_exchange_rate(cls, tcmb_data: dict, enable_update: int):
-        # data_dict = dict(tcmb_data.get("items")[0])
         exchange_rate_date = datetime.datetime.strptime(tcmb_data.pop(cls.tcmb_date_key), cls.tcmb_date_format).date()
-        # tcmb_data.pop(cls.tcmb_strip_key)
         for key in tcmb_data.keys():
             for_selling = 0
             for_buying = 0
