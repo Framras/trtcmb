@@ -98,8 +98,8 @@ class TCMBConnection:
         # Exchange, rates, Daily, (Converted, to, TRY)
         response_dict = self.connect(datagroup_code=self.datagroup_code, series_list=currency_series_as_list,
                                      for_start_date=from_date, for_end_date=to_date)
+        return_list = list()
         if response_dict.get("totalCount") >= 1:
-            return_list = list()
             currency_series_data = response_dict.pop("items")
             reference_dict = dict()
             for currency_tuple in currency_series_data:
@@ -131,4 +131,4 @@ class TCMBConnection:
                             datetime.datetime.strftime(exchange_rate_date, '%d-%m-%Y') + tuple_key)
                 currency_tuple[TCMBCurrencyExchange.tcmb_date_key]=reference_date
                 return_list.append(currency_tuple)
-            return return_list
+        return return_list
