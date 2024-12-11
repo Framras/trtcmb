@@ -23,7 +23,7 @@ class TCMBCurrencyExchange:
         for key in tcmb_data.keys():
             for_selling = 0
             for_buying = 0
-            key_list = str(key).split(cls.response_separator)
+            key_list = list(str(key).split(cls.response_separator))
             from_currency = key_list[2]
             if key_list[3] == cls.selling_code:
                 for_selling = 1
@@ -49,7 +49,7 @@ class TCMBCurrencyExchange:
                 if enable_update == 1:
                     if frdoc.exchange_rate != flt(tcmb_data.get(key)):
                         frdoc.exchange_rate = flt(tcmb_data.get(key))
-                        return frappe.enqueue(frdoc.save, queue="short", timeout=None, event=None,
+                        frappe.enqueue(frdoc.save, queue="short", timeout=None, event=None,
                                               now=True, job_name=None)
             else:
                 newdoc = frappe.new_doc(cls.doctype)
@@ -59,5 +59,5 @@ class TCMBCurrencyExchange:
                 newdoc.for_buying = for_buying
                 newdoc.for_selling = for_selling
                 newdoc.exchange_rate = flt(tcmb_data.get(key))
-                return frappe.enqueue(newdoc.insert, queue="short", timeout=None, event=None,
+                frappe.enqueue(newdoc.insert, queue="short", timeout=None, event=None,
                                       now=True, job_name=None)
