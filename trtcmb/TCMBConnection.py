@@ -36,6 +36,7 @@ class TCMBConnection:
         if self.start_date is not None and self.start_date > datetime.date(1950, 1, 2):
             tcmb_start_date = self.start_date
         # for currency in currency_list:
+        # TODO: get the earliest Exchange Rate Date on each Currency to reduce TCMB query size
         tcmb_exchange_rates = self.get_exchange_rates(currency_list=currency_list,
                                                       from_date=tcmb_start_date,
                                                       to_date=datetime.date.today())
