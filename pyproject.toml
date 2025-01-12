@@ -1,8 +1,0 @@
-[build-system]
-requires = ["setuptools>=64.0.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project.urls]
-Homepage = "https://www.framras.com/"
-Repository = "https://github.com/Framras/trtcmb.git"
-"Bug Reports" = "https://github.com/Framras/trtcmb/issues"
