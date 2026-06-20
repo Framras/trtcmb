@@ -64,23 +64,29 @@ class TCMBConnection:
     def get_single_exchange_rate(self, currency: str, for_date: datetime.date, purpose: str):
         currency_series_data = ""
         if purpose == "for_buying":
-            currency_series_data = self.inner_separator.join(["TP", "DK", currency, TCMBCurrencyExchange.buying_code])
+            currency_series_data = self.inner_separator.join(
+                ["TP", "DK", currency, TCMBCurrencyExchange.buying_code])
         elif purpose == "for_selling":
-            currency_series_data = self.inner_separator.join(["TP", "DK", currency, TCMBCurrencyExchange.selling_code])
-
+            currency_series_data = self.inner_separator.join(
+                ["TP", "DK", currency, TCMBCurrencyExchange.selling_code])
         series_as_list = [currency_series_data]
+
         response_dict = self.connect(datagroup_code=self.datagroup_code, series_list=series_as_list,
                                      for_start_date=for_date, for_end_date=for_date)
 
-        if response_dict.get("totalCount") == 1:
+        # Defensive Check: Surface the actual API error if the structure is unexpected
+        if not isinstance(response_dict, dict) or "totalCount" not in response_dict:
+            frappe.throw(f"Unexpected JSON response from TCMB: {response_dict}")
+
+        if (response_dict.get("totalCount") or 0) == 1:
             currency_response = currency_series_data.replace(self.inner_separator,
                                                              TCMBCurrencyExchange.response_separator)
             if response_dict.get("items")[0].get(currency_response) is None:
                 exchange_rate_date = datetime.datetime.strptime(response_dict.get("items")[0].get("Tarih"),
-                                                                TCMBCurrencyExchange.tcmb_date_format).date() - self.a_day
+                                                                TCMBCurrencyExchange.tcmb_date_format).date() - \
+                                     self.a_day
                 new_dict = self.get_single_exchange_rate(currency, exchange_rate_date, purpose)
                 response_dict["items"][0][currency_response] = new_dict["items"][0][currency_response]
-
         return response_dict
 
     def get_exchange_rates(self, currency_list: list, from_date: datetime.date, to_date: datetime.date):
@@ -95,28 +101,29 @@ class TCMBConnection:
                                      for_start_date=from_date, for_end_date=to_date)
         return_list = list()
 
-        if response_dict.get("totalCount") >= 1:
+        # Defensive Check: Surface the actual API error if the structure is unexpected
+        if not isinstance(response_dict, dict) or "totalCount" not in response_dict:
+            frappe.throw(f"Unexpected JSON response from TCMB: {response_dict}")
+
+        # Safely default to 0 if totalCount is somehow literally None
+        if (response_dict.get("totalCount") or 0) >= 1:
             currency_series_data = response_dict.pop("items")
             reference_dict = dict()
-
             for currency_tuple in currency_series_data:
                 currency_tuple.pop(TCMBCurrencyExchange.tcmb_strip_key)
                 reference_date = currency_tuple.pop("Tarih")
-
                 for tuple_key in list(currency_tuple):
                     reference_dict[reference_date + tuple_key] = currency_tuple.get(tuple_key)
-
                     if currency_tuple.get(tuple_key) is None:
                         exchange_rate_date = datetime.datetime.strptime(reference_date,
-                                                                        TCMBCurrencyExchange.tcmb_date_format).date() - self.a_day
+                                                                        TCMBCurrencyExchange.tcmb_date_format).date() - \
+                                             self.a_day
                         tcmb_series_split = str(tuple_key).split("_")
                         purpose = ""
-
                         if tcmb_series_split[3] == TCMBCurrencyExchange.buying_code:
                             purpose = "for_buying"
                         if tcmb_series_split[3] == TCMBCurrencyExchange.selling_code:
                             purpose = "for_selling"
-
                         if reference_dict.get(
                                 datetime.datetime.strftime(exchange_rate_date, '%d-%m-%Y') + tuple_key) is None:
                             new_dict = self.get_single_exchange_rate(tcmb_series_split[2], exchange_rate_date,
@@ -125,8 +132,6 @@ class TCMBConnection:
                         else:
                             currency_tuple[tuple_key] = reference_dict.get(
                                 datetime.datetime.strftime(exchange_rate_date, '%d-%m-%Y') + tuple_key)
-
                 currency_tuple[TCMBCurrencyExchange.tcmb_date_key] = reference_date
                 return_list.append(currency_tuple)
-
         return return_list
