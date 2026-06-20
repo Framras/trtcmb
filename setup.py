@@ -10,7 +10,7 @@ from trtcmb import __version__ as version
 setup(
     name='trtcmb',
     version=version,
-    description='TR Turkish Central Bank EVDS web services integration of economic data for ErpNext',
+    description='TR Turkish Central Bank EVDS 3 web services integration of economic data for ErpNext',
     author='Framras AS-Izmir',
     author_email='bilgi@framras.com.tr',
     packages=find_packages(),

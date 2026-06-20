@@ -18,15 +18,18 @@ class TCMBCurrencyExchange:
     @classmethod
     def commit_single_currency_exchange_rate(cls, tcmb_data: dict, enable_update: int):
         exchange_rate_date = datetime.datetime.strptime(tcmb_data.pop(cls.tcmb_date_key), cls.tcmb_date_format).date()
+
         for key in tcmb_data.keys():
             for_selling = 0
             for_buying = 0
             key_list = list(str(key).split(cls.response_separator))
             from_currency = key_list[2]
+
             if key_list[3] == cls.selling_code:
                 for_selling = 1
             elif key_list[3] == cls.buying_code:
                 for_buying = 1
+
             # check if record exists by filters
             if frappe.db.exists({
                 "doctype": cls.doctype,
@@ -44,11 +47,12 @@ class TCMBCurrencyExchange:
                     "for_selling": for_selling
                 })
                 frdoc = frappe.get_doc(cls.doctype, frdoc_list[0].get("name"))
+
                 if enable_update == 1:
                     if frdoc.exchange_rate != flt(tcmb_data.get(key)):
                         frdoc.exchange_rate = flt(tcmb_data.get(key))
                         frappe.enqueue(frdoc.save, queue="short", timeout=None, event=None,
-                                              now=True, job_name=None)
+                                       now=True, job_name=None)
             else:
                 newdoc = frappe.new_doc(cls.doctype)
                 newdoc.date = exchange_rate_date
@@ -58,4 +62,4 @@ class TCMBCurrencyExchange:
                 newdoc.for_selling = for_selling
                 newdoc.exchange_rate = flt(tcmb_data.get(key))
                 frappe.enqueue(newdoc.insert, queue="short", timeout=None, event=None,
-                                      now=True, job_name=None)
+                               now=True, job_name=None)
