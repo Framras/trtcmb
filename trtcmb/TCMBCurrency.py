@@ -16,19 +16,29 @@ class TCMBCurrency:
 
     @classmethod
     def get_list_of_enabled_currencies(cls):
-        # get ERPNext enabled currencies
-        currency_list = frappe.get_all(cls.doctype, filters={"enabled": 1, "currency_name": ['not in', ['TRY', 'XAU']]},
-                                       fields=["currency_name"])
-        # TCMB enabled currencies
+        # Fetch the 'name' field (which holds ISO codes like USD, EUR), not 'currency_name'
+        currency_list = frappe.get_all(cls.doctype, filters={"enabled": 1, "name": ['not in', ['TRY', 'XAU']]},
+                                       fields=["name"])
+
         key = frappe.db.get_value(cls.company_setting_doctype, frappe.defaults.get_user_default(cls.company_doctype),
                                   "key")
-
         code = cls.code_prefix + cls.datagroup_code
         return_type = cls.type_prefix + cls.response_type
-        url = cls.service_path + cls.serielist_path + code + return_type
 
-        # Passes authentication API Key correctly via HTTP Headers as per the latest TCMB rules
-        tcmb_data_series = requests.get(url, headers={'key': key}).json()
+        # Use .strip() to clean any accidental whitespace from the user settings
+        url = cls.service_path.strip().rstrip('/') + cls.serielist_path + code + return_type
+
+        headers = {
+            'key': key,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+
+        response = requests.get(url, headers=headers)
+
+        if response.status_code != 200:
+            frappe.throw(f"TCMB API Error {response.status_code}: {response.text[:250]}")
+
+        tcmb_data_series = response.json()
 
         tcmb_currency_list = []
         for tcmb_data_item in tcmb_data_series:
@@ -37,9 +47,7 @@ class TCMBCurrency:
                 if tcmb_currency_data[2] not in tcmb_currency_list:
                     tcmb_currency_list.append(tcmb_currency_data[2])
 
-        # eliminate ERPNext enabled currencies not supported by TCMB data series
-        for currency in currency_list:
-            if not currency.get("currency_name") in tcmb_currency_list:
-                currency_list.remove(currency)
+        # Safely filter out ERPNext currencies not supported by TCMB
+        valid_currency_list = [c for c in currency_list if c.get("name") in tcmb_currency_list]
 
-        return currency_list
+        return valid_currency_list

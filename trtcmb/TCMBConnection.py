@@ -56,10 +56,21 @@ class TCMBConnection:
         tcmb_start_date = self.start_date_prefix + for_start_date.strftime(TCMBCurrencyExchange.tcmb_date_format)
         tcmb_end_date = self.end_date_prefix + for_end_date.strftime(TCMBCurrencyExchange.tcmb_date_format)
         return_type = TCMBCurrency.type_prefix + TCMBCurrency.response_type
-        url = TCMBCurrency.service_path + series + tcmb_start_date + tcmb_end_date + return_type
 
-        # Passes authentication API Key correctly via HTTP Headers as per the latest TCMB rules
-        return requests.get(url, headers={'key': self.key}).json()
+        # Add .strip() here to sanitize user input from the settings doctype
+        url = TCMBCurrency.service_path.strip().rstrip('/') + series + tcmb_start_date + tcmb_end_date + return_type
+
+        headers = {
+            'key': self.key,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+
+        response = requests.get(url, headers=headers)
+
+        if response.status_code != 200:
+            frappe.throw(f"TCMB API Error {response.status_code}: {response.text[:250]}")
+
+        return response.json()
 
     def get_single_exchange_rate(self, currency: str, for_date: datetime.date, purpose: str):
         currency_series_data = ""
@@ -90,22 +101,26 @@ class TCMBConnection:
         return response_dict
 
     def get_exchange_rates(self, currency_list: list, from_date: datetime.date, to_date: datetime.date):
+        # Fail-safe: Do not send empty queries to the TCMB server
+        if not currency_list:
+            return []
+
         currency_series_as_list = list()
         for currency in currency_list:
+            # Swap currency_name for name to ensure pure 3-letter ISO codes are used
             currency_series_as_list.append(self.inner_separator.join(
-                ["TP", "DK", currency.get("currency_name"), TCMBCurrencyExchange.buying_code]))
+                ["TP", "DK", currency.get("name"), TCMBCurrencyExchange.buying_code]))
             currency_series_as_list.append(self.inner_separator.join(
-                ["TP", "DK", currency.get("currency_name"), TCMBCurrencyExchange.selling_code]))
+                ["TP", "DK", currency.get("name"), TCMBCurrencyExchange.selling_code]))
 
         response_dict = self.connect(datagroup_code=self.datagroup_code, series_list=currency_series_as_list,
                                      for_start_date=from_date, for_end_date=to_date)
+
         return_list = list()
 
-        # Defensive Check: Surface the actual API error if the structure is unexpected
         if not isinstance(response_dict, dict) or "totalCount" not in response_dict:
             frappe.throw(f"Unexpected JSON response from TCMB: {response_dict}")
 
-        # Safely default to 0 if totalCount is somehow literally None
         if (response_dict.get("totalCount") or 0) >= 1:
             currency_series_data = response_dict.pop("items")
             reference_dict = dict()
