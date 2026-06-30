@@ -101,13 +101,11 @@ class TCMBConnection:
         return response_dict
 
     def get_exchange_rates(self, currency_list: list, from_date: datetime.date, to_date: datetime.date):
-        # Fail-safe: Do not send empty queries to the TCMB server
         if not currency_list:
             return []
 
         currency_series_as_list = list()
         for currency in currency_list:
-            # Swap currency_name for name to ensure pure 3-letter ISO codes are used
             currency_series_as_list.append(self.inner_separator.join(
                 ["TP", "DK", currency.get("name"), TCMBCurrencyExchange.buying_code]))
             currency_series_as_list.append(self.inner_separator.join(
@@ -123,30 +121,25 @@ class TCMBConnection:
 
         if (response_dict.get("totalCount") or 0) >= 1:
             currency_series_data = response_dict.pop("items")
-            reference_dict = dict()
+
+            # Dictionary to remember the last valid rate we saw for each currency type
+            last_known_rates = dict()
+
             for currency_tuple in currency_series_data:
-                currency_tuple.pop(TCMBCurrencyExchange.tcmb_strip_key)
+                currency_tuple.pop(TCMBCurrencyExchange.tcmb_strip_key, None)
                 reference_date = currency_tuple.pop("Tarih")
+
                 for tuple_key in list(currency_tuple):
-                    reference_dict[reference_date + tuple_key] = currency_tuple.get(tuple_key)
-                    if currency_tuple.get(tuple_key) is None:
-                        exchange_rate_date = datetime.datetime.strptime(reference_date,
-                                                                        TCMBCurrencyExchange.tcmb_date_format).date() - \
-                                             self.a_day
-                        tcmb_series_split = str(tuple_key).split("_")
-                        purpose = ""
-                        if tcmb_series_split[3] == TCMBCurrencyExchange.buying_code:
-                            purpose = "for_buying"
-                        if tcmb_series_split[3] == TCMBCurrencyExchange.selling_code:
-                            purpose = "for_selling"
-                        if reference_dict.get(
-                                datetime.datetime.strftime(exchange_rate_date, '%d-%m-%Y') + tuple_key) is None:
-                            new_dict = self.get_single_exchange_rate(tcmb_series_split[2], exchange_rate_date,
-                                                                     purpose=purpose)
-                            currency_tuple[tuple_key] = new_dict["items"][0][tuple_key]
-                        else:
-                            currency_tuple[tuple_key] = reference_dict.get(
-                                datetime.datetime.strftime(exchange_rate_date, '%d-%m-%Y') + tuple_key)
+                    current_rate = currency_tuple.get(tuple_key)
+
+                    if current_rate is None:
+                        # If the rate is blank (e.g. a weekend), use the last known rate from memory
+                        currency_tuple[tuple_key] = last_known_rates.get(tuple_key)
+                    else:
+                        # If the rate is valid, save it to memory for future weekends
+                        last_known_rates[tuple_key] = current_rate
+
                 currency_tuple[TCMBCurrencyExchange.tcmb_date_key] = reference_date
                 return_list.append(currency_tuple)
+
         return return_list
