@@ -12,8 +12,8 @@ required_apps = ["erpnext"]
 
 scheduler_events = {
     "cron": {
-        "58 00 * * *": [
-            "trtcmb.tasks.every_day_at_00_58"
+        "*/15 * * * *": [
+            "trtcmb.tasks.import_due_companies"
         ]
     }
 }

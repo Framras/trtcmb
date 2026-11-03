@@ -5,10 +5,14 @@ from frappe import _
 from frappe.utils import add_days, cint, getdate, nowdate
 
 from trtcmb.TCMBCurrency import TCMBCurrency
-from trtcmb.TCMBCurrencyExchange import TCMBCurrencyExchange
+from trtcmb.TCMBCurrencyExchange import (
+    DEFAULT_BATCH_DAYS,
+    TCMBCurrencyExchange,
+    normalize_batch_days,
+    normalize_rate_options,
+    transaction_flags,
+)
 
-# Inclusive calendar days per TCMB request. 01-01 through 05-01 is one batch.
-BATCH_DAYS = 5
 BATCH_PAUSE_SECONDS = 1.0
 
 
@@ -21,7 +25,7 @@ class TCMBConnection:
         self.start_date_prefix = "&startDate="
         self.end_date_prefix = "&endDate="
         self.datagroup_code = "bie_dkdovizgn"
-        self.batch_days = BATCH_DAYS
+        self.batch_days = DEFAULT_BATCH_DAYS
         self.batch_pause_seconds = BATCH_PAUSE_SECONDS
 
         self.company = company or frappe.defaults.get_user_default(TCMBCurrency.company_doctype)
@@ -40,6 +44,29 @@ class TCMBConnection:
         )
         self.enable_update = cint(
             frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "enable_update")
+        )
+        rate_settings = frappe.db.get_value(
+            TCMBCurrency.company_setting_doctype,
+            self.company,
+            [
+                "batch_days",
+                "fetch_buying_rate",
+                "buying_rate_for_buying",
+                "buying_rate_for_selling",
+                "fetch_selling_rate",
+                "selling_rate_for_buying",
+                "selling_rate_for_selling",
+            ],
+            as_dict=True,
+        ) or {}
+        self.batch_days = normalize_batch_days(rate_settings.get("batch_days"))
+        self.rate_options = normalize_rate_options(
+            rate_settings.get("fetch_buying_rate"),
+            rate_settings.get("buying_rate_for_buying"),
+            rate_settings.get("buying_rate_for_selling"),
+            rate_settings.get("fetch_selling_rate"),
+            rate_settings.get("selling_rate_for_buying"),
+            rate_settings.get("selling_rate_for_selling"),
         )
 
     def get_exchange_rates_for_enabled_currencies(self, datagroup_code: str, incremental: bool = True):
@@ -79,7 +106,7 @@ class TCMBConnection:
             )
             for tcmb_exchange_rate_data in tcmb_exchange_rates:
                 TCMBCurrencyExchange.commit_single_currency_exchange_rate(
-                    tcmb_exchange_rate_data, self.enable_update
+                    tcmb_exchange_rate_data, self.enable_update, self.rate_options
                 )
 
             imported_through = chunk_end
@@ -168,7 +195,13 @@ class TCMBConnection:
             selling_series = currency.get("selling_series") or self.inner_separator.join(
                 ["TP", "DK", currency.get("name"), TCMBCurrencyExchange.selling_code]
             )
-            currency_series_as_list.extend([buying_series, selling_series])
+            if transaction_flags(TCMBCurrencyExchange.buying_code, self.rate_options):
+                currency_series_as_list.append(buying_series)
+            if transaction_flags(TCMBCurrencyExchange.selling_code, self.rate_options):
+                currency_series_as_list.append(selling_series)
+
+        if not currency_series_as_list:
+            frappe.throw(_("Select a TCMB rate and a transaction type in the company settings."))
 
         response_dict = self.connect(
             datagroup_code=self.datagroup_code,
@@ -210,7 +243,7 @@ class TCMBConnection:
         return return_list
 
 
-def iter_date_batches(from_date, to_date, batch_days: int = BATCH_DAYS) -> list[tuple[date, date]]:
+def iter_date_batches(from_date, to_date, batch_days: int = DEFAULT_BATCH_DAYS) -> list[tuple[date, date]]:
     """Yield inclusive date windows of `batch_days` covering from_date through to_date."""
     if batch_days < 1:
         frappe.throw(_("TCMB batch size must be at least 1 day."))
