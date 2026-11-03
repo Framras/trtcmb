@@ -1,0 +1,16 @@
+[project]
+name = "trtcmb"
+authors = [
+    { name = "Framras AS-Izmir", email = "bilgi@framras.com.tr"}
+]
+description = "TR Turkish Central Bank EVDS web services integration for ERPNext"
+requires-python = ">=3.14"
+readme = "README.md"
+dynamic = ["version"]
+dependencies = [
+    "requests>=2.32.0",
+]
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"

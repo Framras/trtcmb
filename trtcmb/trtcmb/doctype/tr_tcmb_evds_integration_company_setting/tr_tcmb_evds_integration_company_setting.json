@@ -1,5 +1,7 @@
 {
+  "actions": [],
   "autoname": "field:company_name",
+  "links": [],
   "creation": "2019-11-27 00:07:52.669018",
   "doctype": "DocType",
   "editable_grid": 1,

@@ -1,145 +1,229 @@
-import datetime
+from datetime import date
+
 import frappe
-import requests
+from frappe import _
+from frappe.utils import add_days, cint, getdate, nowdate
 
 from trtcmb.TCMBCurrency import TCMBCurrency
 from trtcmb.TCMBCurrencyExchange import TCMBCurrencyExchange
 
+# Inclusive calendar days per TCMB request. 01-01 through 05-01 is one batch.
+BATCH_DAYS = 5
+BATCH_PAUSE_SECONDS = 1.0
+
 
 class TCMBConnection:
-
-    def __init__(self):
-        self.a_day = datetime.timedelta(days=1)
+    def __init__(self, company: str | None = None):
+        self.a_day = 1
         self.series_separator = "-"
         self.inner_separator = "."
         self.series_prefix = "/series="
         self.start_date_prefix = "&startDate="
         self.end_date_prefix = "&endDate="
         self.datagroup_code = "bie_dkdovizgn"
+        self.batch_days = BATCH_DAYS
+        self.batch_pause_seconds = BATCH_PAUSE_SECONDS
 
-        # global settings
-        self.company = frappe.defaults.get_user_default(TCMBCurrency.company_doctype)
-        # company settings
-        self.enable = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "enable")
+        self.company = company or frappe.defaults.get_user_default(TCMBCurrency.company_doctype)
+        if not self.company:
+            frappe.throw(_("No company found for TCMB EVDS integration."))
+
+        self.enable = cint(
+            frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "enable")
+        )
         self.key = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "key")
-        self.start_date = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "start_date")
-        self.last_updated = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "last_updated")
-        self.enable_update = frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "enable_update")
+        self.start_date = frappe.db.get_value(
+            TCMBCurrency.company_setting_doctype, self.company, "start_date"
+        )
+        self.last_updated = frappe.db.get_value(
+            TCMBCurrency.company_setting_doctype, self.company, "last_updated"
+        )
+        self.enable_update = cint(
+            frappe.db.get_value(TCMBCurrency.company_setting_doctype, self.company, "enable_update")
+        )
 
-    def get_exchange_rates_for_enabled_currencies(self, datagroup_code: str):
+    def get_exchange_rates_for_enabled_currencies(self, datagroup_code: str, incremental: bool = True):
         if datagroup_code != self.datagroup_code or self.enable != 1:
             return False
 
-        currency_list = TCMBCurrency.get_list_of_enabled_currencies()
-        tcmb_start_date = datetime.date.today()
+        currency_list = TCMBCurrency.get_list_of_enabled_currencies(company=self.company)
+        if not currency_list:
+            frappe.msgprint(_("No enabled currencies match TCMB EVDS series."))
+            return False
 
-        if self.start_date is not None and self.start_date > datetime.date(1950, 1, 2):
-            tcmb_start_date = self.start_date
+        today = getdate(nowdate())
+        tcmb_start_date = today
 
-        tcmb_exchange_rates = self.get_exchange_rates(
-            currency_list=currency_list,
-            from_date=tcmb_start_date,
-            to_date=datetime.date.today()
-        )
+        if incremental and self.last_updated:
+            tcmb_start_date = add_days(getdate(self.last_updated), 1)
+        elif self.start_date:
+            tcmb_start_date = getdate(self.start_date)
 
-        for tcmb_exchange_rate_data in tcmb_exchange_rates:
-            TCMBCurrencyExchange.commit_single_currency_exchange_rate(tcmb_exchange_rate_data, self.enable_update)
+        if tcmb_start_date > today:
+            return today
 
-        return datetime.datetime.today().date()
+        last_known_rates: dict = {}
+        imported_through = tcmb_start_date
+        first_batch = True
 
-    def connect(self, datagroup_code: str, series_list: list, for_start_date: datetime.date,
-                for_end_date: datetime.date):
+        for chunk_start, chunk_end in iter_date_batches(tcmb_start_date, today, self.batch_days):
+            if not first_batch:
+                TCMBCurrency.pause(self.batch_pause_seconds)
+            first_batch = False
+
+            tcmb_exchange_rates = self.get_exchange_rates(
+                currency_list=currency_list,
+                from_date=chunk_start,
+                to_date=chunk_end,
+                last_known_rates=last_known_rates,
+            )
+            for tcmb_exchange_rate_data in tcmb_exchange_rates:
+                TCMBCurrencyExchange.commit_single_currency_exchange_rate(
+                    tcmb_exchange_rate_data, self.enable_update
+                )
+
+            imported_through = chunk_end
+            frappe.db.set_value(
+                TCMBCurrency.company_setting_doctype,
+                self.company,
+                "last_updated",
+                imported_through,
+            )
+            if not getattr(frappe.flags, "in_test", False):
+                frappe.db.commit()
+
+        return imported_through
+
+    def connect(
+        self,
+        datagroup_code: str,
+        series_list: list,
+        for_start_date,
+        for_end_date,
+    ):
         if datagroup_code != self.datagroup_code or self.enable != 1:
             return False
 
         series = self.series_prefix + self.series_separator.join(series_list)
-        tcmb_start_date = self.start_date_prefix + for_start_date.strftime(TCMBCurrencyExchange.tcmb_date_format)
-        tcmb_end_date = self.end_date_prefix + for_end_date.strftime(TCMBCurrencyExchange.tcmb_date_format)
+        tcmb_start_date = self.start_date_prefix + getdate(for_start_date).strftime(
+            TCMBCurrencyExchange.tcmb_date_format
+        )
+        tcmb_end_date = self.end_date_prefix + getdate(for_end_date).strftime(
+            TCMBCurrencyExchange.tcmb_date_format
+        )
         return_type = TCMBCurrency.type_prefix + TCMBCurrency.response_type
+        url = TCMBCurrency.get_service_path() + series + tcmb_start_date + tcmb_end_date + return_type
+        return TCMBCurrency.request_json(url, str(self.key or ""))
 
-        # Add .strip() here to sanitize user input from the settings doctype
-        url = TCMBCurrency.service_path.strip().rstrip('/') + series + tcmb_start_date + tcmb_end_date + return_type
-
-        headers = {
-            'key': self.key,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-
-        response = requests.get(url, headers=headers)
-
-        if response.status_code != 200:
-            frappe.throw(f"TCMB API Error {response.status_code}: {response.text[:250]}")
-
-        return response.json()
-
-    def get_single_exchange_rate(self, currency: str, for_date: datetime.date, purpose: str):
+    def get_single_exchange_rate(self, currency: str, for_date, purpose: str):
         currency_series_data = ""
         if purpose == "for_buying":
             currency_series_data = self.inner_separator.join(
-                ["TP", "DK", currency, TCMBCurrencyExchange.buying_code])
+                ["TP", "DK", currency, TCMBCurrencyExchange.buying_code]
+            )
         elif purpose == "for_selling":
             currency_series_data = self.inner_separator.join(
-                ["TP", "DK", currency, TCMBCurrencyExchange.selling_code])
+                ["TP", "DK", currency, TCMBCurrencyExchange.selling_code]
+            )
         series_as_list = [currency_series_data]
 
-        response_dict = self.connect(datagroup_code=self.datagroup_code, series_list=series_as_list,
-                                     for_start_date=for_date, for_end_date=for_date)
-
-        # Defensive Check: Surface the actual API error if the structure is unexpected
+        response_dict = self.connect(
+            datagroup_code=self.datagroup_code,
+            series_list=series_as_list,
+            for_start_date=for_date,
+            for_end_date=for_date,
+        )
         if not isinstance(response_dict, dict) or "totalCount" not in response_dict:
-            frappe.throw(f"Unexpected JSON response from TCMB: {response_dict}")
+            frappe.throw(_("Unexpected JSON response from TCMB: {0}").format(str(response_dict)[:250]))
 
-        if (response_dict.get("totalCount") or 0) == 1:
-            currency_response = currency_series_data.replace(self.inner_separator,
-                                                             TCMBCurrencyExchange.response_separator)
-            if response_dict.get("items")[0].get(currency_response) is None:
-                exchange_rate_date = datetime.datetime.strptime(response_dict.get("items")[0].get("Tarih"),
-                                                                TCMBCurrencyExchange.tcmb_date_format).date() - \
-                                     self.a_day
+        if cint(response_dict.get("totalCount")) == 1:
+            currency_response = currency_series_data.replace(
+                self.inner_separator, TCMBCurrencyExchange.response_separator
+            )
+            items = response_dict.get("items") or []
+            if items and items[0].get(currency_response) is None:
+                exchange_rate_date = add_days(
+                    TCMBCurrencyExchange.parse_tcmb_date(items[0].get("Tarih")),
+                    -self.a_day,
+                )
                 new_dict = self.get_single_exchange_rate(currency, exchange_rate_date, purpose)
                 response_dict["items"][0][currency_response] = new_dict["items"][0][currency_response]
         return response_dict
 
-    def get_exchange_rates(self, currency_list: list, from_date: datetime.date, to_date: datetime.date):
+    def get_exchange_rates(
+        self,
+        currency_list: list,
+        from_date,
+        to_date,
+        last_known_rates: dict | None = None,
+    ) -> list:
         if not currency_list:
             return []
 
-        currency_series_as_list = list()
+        currency_series_as_list: list[str] = []
         for currency in currency_list:
-            currency_series_as_list.append(self.inner_separator.join(
-                ["TP", "DK", currency.get("name"), TCMBCurrencyExchange.buying_code]))
-            currency_series_as_list.append(self.inner_separator.join(
-                ["TP", "DK", currency.get("name"), TCMBCurrencyExchange.selling_code]))
+            buying_series = currency.get("buying_series") or self.inner_separator.join(
+                ["TP", "DK", currency.get("name"), TCMBCurrencyExchange.buying_code]
+            )
+            selling_series = currency.get("selling_series") or self.inner_separator.join(
+                ["TP", "DK", currency.get("name"), TCMBCurrencyExchange.selling_code]
+            )
+            currency_series_as_list.extend([buying_series, selling_series])
 
-        response_dict = self.connect(datagroup_code=self.datagroup_code, series_list=currency_series_as_list,
-                                     for_start_date=from_date, for_end_date=to_date)
+        response_dict = self.connect(
+            datagroup_code=self.datagroup_code,
+            series_list=currency_series_as_list,
+            for_start_date=from_date,
+            for_end_date=to_date,
+        )
+        return self._normalize_rate_items(response_dict, last_known_rates if last_known_rates is not None else {})
 
-        return_list = list()
-
+    def _normalize_rate_items(self, response_dict, last_known_rates: dict) -> list[dict]:
         if not isinstance(response_dict, dict) or "totalCount" not in response_dict:
-            frappe.throw(f"Unexpected JSON response from TCMB: {response_dict}")
+            frappe.throw(_("Unexpected JSON response from TCMB: {0}").format(str(response_dict)[:250]))
 
-        if (response_dict.get("totalCount") or 0) >= 1:
-            currency_series_data = response_dict.pop("items")
+        if cint(response_dict.get("totalCount")) < 1:
+            return []
 
-            # Dictionary to remember the last valid rate we saw for each currency type
-            last_known_rates = dict()
+        currency_series_data = response_dict.get("items") or []
+        return_list: list[dict] = []
 
-            for currency_tuple in currency_series_data:
-                currency_tuple.pop(TCMBCurrencyExchange.tcmb_strip_key, None)
-                reference_date = currency_tuple.pop("Tarih")
+        for currency_tuple in currency_series_data:
+            if not isinstance(currency_tuple, dict):
+                continue
+            row = dict(currency_tuple)
+            row.pop(TCMBCurrencyExchange.tcmb_strip_key, None)
+            reference_date = row.pop("Tarih", None)
+            if not reference_date:
+                continue
 
-                for tuple_key in list(currency_tuple):
-                    current_rate = currency_tuple.get(tuple_key)
+            for tuple_key in list(row):
+                current_rate = row.get(tuple_key)
+                if current_rate in (None, ""):
+                    row[tuple_key] = last_known_rates.get(tuple_key)
+                else:
+                    last_known_rates[tuple_key] = current_rate
 
-                    if current_rate is None:
-                        # If the rate is blank (e.g. a weekend), use the last known rate from memory
-                        currency_tuple[tuple_key] = last_known_rates.get(tuple_key)
-                    else:
-                        # If the rate is valid, save it to memory for future weekends
-                        last_known_rates[tuple_key] = current_rate
-
-                currency_tuple[TCMBCurrencyExchange.tcmb_date_key] = reference_date
-                return_list.append(currency_tuple)
+            row[TCMBCurrencyExchange.tcmb_date_key] = reference_date
+            return_list.append(row)
 
         return return_list
+
+
+def iter_date_batches(from_date, to_date, batch_days: int = BATCH_DAYS) -> list[tuple[date, date]]:
+    """Yield inclusive date windows of `batch_days` covering from_date through to_date."""
+    if batch_days < 1:
+        frappe.throw(_("TCMB batch size must be at least 1 day."))
+
+    chunk_start = getdate(from_date)
+    final_date = getdate(to_date)
+    batches: list[tuple[date, date]] = []
+
+    while chunk_start <= final_date:
+        chunk_end = getdate(add_days(chunk_start, batch_days - 1))
+        if chunk_end > final_date:
+            chunk_end = final_date
+        batches.append((chunk_start, chunk_end))
+        chunk_start = add_days(chunk_end, 1)
+
+    return batches

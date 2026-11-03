@@ -14,7 +14,9 @@
       "label": "Service Path"
     }
   ],
+  "actions": [],
   "issingle": 1,
+  "links": [],
   "modified": "2019-11-27 16:58:17.219323",
   "modified_by": "Administrator",
   "module": "Trtcmb",

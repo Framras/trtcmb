@@ -1,7 +1,10 @@
 {
+ "app": "trtcmb",
  "category": "Modules",
  "charts": [],
+ "content": "[{\"id\":\"trtcmb-links\",\"type\":\"header\",\"data\":{\"text\":\"TCMB EVDS\",\"col\":12}},{\"id\":\"trtcmb-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Firma Ayarlar\\u0131\",\"col\":4}},{\"id\":\"trtcmb-setting\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"TCMB EVDS Entegrasyon Ayarlar\\u0131\",\"col\":4}}]",
  "creation": "2022-01-14 17:37:27.778062",
+ "custom_blocks": [],
  "developer_mode_only": 0,
  "disable_user_customization": 0,
  "docstatus": 0,
@@ -10,8 +13,10 @@
  "hide_custom": 0,
  "idx": 0,
  "is_default": 0,
+ "is_hidden": 0,
  "is_standard": 1,
  "label": "TR TCMB",
+ "public": 1,
  "links": [
   {
    "hidden": 0,

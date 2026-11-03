@@ -1,8 +1,8 @@
 # Copyright (c) 2022, Framras AS-Izmir and Contributors
 # See license.txt
 
-# import frappe
-import unittest
+from frappe.tests import UnitTestCase
 
-class TestFonlar(unittest.TestCase):
-	pass
+
+class TestFonlar(UnitTestCase):
+    pass
