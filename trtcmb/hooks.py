@@ -10,6 +10,8 @@ app_email = "bilgi@framras.com.tr"
 app_license = "MIT"
 required_apps = ["erpnext"]
 
+after_migrate = ["trtcmb.patches.v16_0.retire_journal_entry_extensions.clear_meta_cache"]
+
 scheduler_events = {
     "cron": {
         "*/15 * * * *": [

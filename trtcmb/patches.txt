@@ -1,0 +1,5 @@
+[pre_model_sync]
+trtcmb.patches.v16_0.retire_journal_entry_extensions
+trtcmb.patches.v16_0.convert_kiymet_to_data
+
+[post_model_sync]

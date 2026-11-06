@@ -6,6 +6,13 @@ from frappe.utils import add_days, get_year_start, getdate
 
 from trtcmb.TCMBCurrencyExchange import DEFAULT_BATCH_DAYS
 
+# Version-15 accepts a start date only when it is after this day. TCMB keeps no rates before it.
+EARLIEST_TCMB_DATE = date(1950, 1, 2)
+
+
+def tcmb_date_is_maintained(value) -> bool:
+    return getdate(value) > EARLIEST_TCMB_DATE
+
 
 def resolve_import_start(
     start_date,
@@ -18,13 +25,19 @@ def resolve_import_start(
 
     An incremental run that already has a last update continues from the next day.
     A supplied start date is used as entered. 1 January of the current year is used
-    only when that date is empty.
+    only when that date is empty. A date on or before 2 January 1950 is replaced
+    with today, because TCMB keeps no rates before that day.
     """
     if incremental and last_updated:
-        return getdate(add_days(getdate(last_updated), 1))
-    if start_date:
-        return getdate(start_date)
-    return getdate(get_year_start(today))
+        start = getdate(add_days(getdate(last_updated), 1))
+    elif start_date:
+        start = getdate(start_date)
+    else:
+        start = getdate(get_year_start(today))
+
+    if not tcmb_date_is_maintained(start):
+        return getdate(today)
+    return start
 
 
 def calendar_days(start, end) -> list[date]:

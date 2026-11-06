@@ -62,6 +62,21 @@ class TestTCMBDateBatches(UnitTestCase):
             date(2026, 11, 6),
         )
 
+    def test_start_on_or_before_2_january_1950_uses_today(self):
+        today = date(2026, 11, 6)
+        self.assertEqual(resolve_import_start(date(1950, 1, 2), today), today)
+        self.assertEqual(resolve_import_start(date(1949, 12, 31), today), today)
+        self.assertEqual(resolve_import_start(date(1950, 1, 3), today), date(1950, 1, 3))
+        self.assertEqual(
+            resolve_import_start(
+                date(1940, 1, 1),
+                today,
+                last_updated=date(1949, 12, 31),
+                incremental=True,
+            ),
+            today,
+        )
+
     def test_first_working_day_keeps_the_announced_rate_on_holidays_after_it(self):
         series = "TP_DK_USD_A_YTL"
         announcements = [

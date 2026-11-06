@@ -1,8 +1,14 @@
 import frappe
 from frappe import _
-from frappe.utils import add_days, cint, flt, getdate, nowdate
+from frappe.utils import add_days, cint, flt, formatdate, getdate, nowdate
 
-from trtcmb.dates import calendar_days, iter_date_batches, resolve_import_start
+from trtcmb.dates import (
+    EARLIEST_TCMB_DATE,
+    calendar_days,
+    iter_date_batches,
+    resolve_import_start,
+    tcmb_date_is_maintained,
+)
 from trtcmb.recording import AnnouncedRate, normalize_recording_rule, rates_for_rule
 from trtcmb.TCMBCurrency import TCMBCurrency
 from trtcmb.TCMBCurrencyExchange import (
@@ -104,9 +110,10 @@ class TCMBConnection:
         return today
 
     def _collect_announcements(self, currency_list: list, save_from, today) -> list[AnnouncedRate]:
-        announcements = [
-            self.retrieve_announced_rate(currency_list, add_days(save_from, -self.a_day))
-        ]
+        announcements = []
+        prior_day = add_days(save_from, -self.a_day)
+        if tcmb_date_is_maintained(prior_day):
+            announcements.append(self.retrieve_announced_rate(currency_list, prior_day))
         pause_before_request = True
         for chunk_start, chunk_end in iter_date_batches(save_from, today, self.batch_days):
             if pause_before_request:
@@ -152,10 +159,16 @@ class TCMBConnection:
 
         Dates visited only to find a rate are not saved.
         """
+        if not tcmb_date_is_maintained(for_date):
+            frappe.throw(
+                _("TCMB does not maintain exchange rates on or before {0}.").format(
+                    formatdate(EARLIEST_TCMB_DATE)
+                )
+            )
         if depth > LOOKBACK_LIMIT_DAYS:
             frappe.throw(
                 _("No TCMB rate was found within {0} days before {1}.").format(
-                    LOOKBACK_LIMIT_DAYS, getdate(for_date)
+                    LOOKBACK_LIMIT_DAYS, formatdate(for_date)
                 )
             )
         if depth:
