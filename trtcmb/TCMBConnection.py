@@ -21,6 +21,10 @@ from trtcmb.TCMBCurrencyExchange import (
 
 BATCH_PAUSE_SECONDS = 1.0
 LOOKBACK_LIMIT_DAYS = 30
+
+
+class TCMBRateNotFound(frappe.ValidationError):
+    """No maintained TCMB rate was found for the requested day."""
 _RATE_FIELDS = (
     (TCMBCurrencyExchange.buying_code, "buying_series"),
     (TCMBCurrencyExchange.selling_code, "selling_series"),
@@ -104,44 +108,104 @@ class TCMBConnection:
         if save_from > today:
             return today
 
-        announcements = self._collect_announcements(currency_list, save_from, today)
-        recorded = rates_for_rule(self.rate_recording_rule, announcements, save_from, today)
-        self._save_recorded_rates(recorded, save_from, today)
-        return today
+        carried = self._anchor_for_range(currency_list, save_from, today)
+        recorded_days = 0
+        last_recorded = None
+        empty_chunks = 0
 
-    def _collect_announcements(self, currency_list: list, save_from, today) -> list[AnnouncedRate]:
-        announcements = []
-        prior_day = add_days(save_from, -self.a_day)
-        if tcmb_date_is_maintained(prior_day):
-            announcements.append(self.retrieve_announced_rate(currency_list, prior_day))
-        pause_before_request = True
         for chunk_start, chunk_end in iter_date_batches(save_from, today, self.batch_days):
-            if pause_before_request:
-                TCMBCurrency.pause(self.batch_pause_seconds)
-            pause_before_request = True
-            announcements.extend(
-                announced_rates_in(self.get_exchange_rates(currency_list, chunk_start, chunk_end))
-            )
-        return announcements
+            TCMBCurrency.pause(self.batch_pause_seconds)
+            chunk_rows, total_count = self.get_exchange_rates(currency_list, chunk_start, chunk_end)
+            chunk_announcements = announced_rates_in(chunk_rows)
+            outage = total_count == 0 and _chunk_has_weekday(chunk_start, chunk_end)
+            written_days: list = []
+            if not outage:
+                recorded = rates_for_rule(
+                    self.rate_recording_rule,
+                    ([carried] if carried else []) + chunk_announcements,
+                    chunk_start,
+                    chunk_end,
+                )
+                written_days = self.record_exchange_rates(recorded)
+            if written_days:
+                latest = max(written_days)
+                last_recorded = latest if last_recorded is None else max(last_recorded, latest)
+                self._advance_last_updated(latest)
+                recorded_days += len(written_days)
+            if outage:
+                empty_chunks += 1
+                frappe.logger("trtcmb").warning(
+                    "TCMB returned no rates for {0} from {1} to {2}".format(
+                        self.company, formatdate(chunk_start), formatdate(chunk_end)
+                    )
+                )
+            if chunk_announcements:
+                carried = max(chunk_announcements, key=lambda item: item.announced_on)
+            self._commit_chunk()
+            if outage and recorded_days and not written_days:
+                break
 
-    def _save_recorded_rates(self, recorded: list[tuple], save_from, today) -> None:
-        recorded_by_date = dict(recorded)
-        for chunk_start, chunk_end in iter_date_batches(save_from, today, self.batch_days):
-            self.record_exchange_rates(
-                [
-                    (day, recorded_by_date[day])
-                    for day in calendar_days(chunk_start, chunk_end)
-                    if day in recorded_by_date
-                ]
-            )
-            frappe.db.set_value(
-                TCMBCurrency.company_setting_doctype,
+        frappe.logger("trtcmb").info(
+            "TCMB import for {0} from {1} to {2}: recorded {3} days, {4} empty chunks, last_updated {5}".format(
                 self.company,
-                "last_updated",
-                chunk_end,
+                formatdate(save_from),
+                formatdate(today),
+                recorded_days,
+                empty_chunks,
+                formatdate(self.last_updated) if self.last_updated else "",
             )
-            if not getattr(frappe.flags, "in_test", False):
-                frappe.db.commit()
+        )
+        if recorded_days == 0:
+            frappe.throw(
+                _("No TCMB rates were recorded for {0} from {1} to {2}.").format(
+                    self.company, formatdate(save_from), formatdate(today)
+                )
+            )
+        return last_recorded
+
+    def _anchor_for_range(self, currency_list: list, save_from, today) -> AnnouncedRate | None:
+        """Return the rate before save_from, or None when the range itself has the first rate."""
+        prior_day = add_days(save_from, -self.a_day)
+        try:
+            return self.retrieve_announced_rate(currency_list, prior_day)
+        except TCMBRateNotFound:
+            first_on = self._scan_forward_for_announcement(currency_list, save_from, today)
+            if not first_on:
+                raise
+            frappe.logger("trtcmb").info(
+                "TCMB anchor is missing for {0}; first data is on {1}".format(
+                    self.company, formatdate(first_on)
+                )
+            )
+            return None
+
+    def _scan_forward_for_announcement(self, currency_list: list, save_from, today):
+        for offset in range(LOOKBACK_LIMIT_DAYS):
+            day = getdate(add_days(save_from, offset))
+            if day > getdate(today):
+                break
+            TCMBCurrency.pause(self.batch_pause_seconds)
+            rows, _total_count = self.get_exchange_rates(currency_list, day, day)
+            found = announced_rates_in(rows)
+            if found:
+                return found[0].announced_on
+        return None
+
+    def _advance_last_updated(self, day) -> None:
+        day = getdate(day)
+        if self.last_updated and getdate(self.last_updated) >= day:
+            return
+        self.last_updated = day
+        frappe.db.set_value(
+            TCMBCurrency.company_setting_doctype,
+            self.company,
+            "last_updated",
+            day,
+        )
+
+    def _commit_chunk(self) -> None:
+        if not getattr(frappe.flags, "in_test", False):
+            frappe.db.commit()
 
     def connect(self, series_list: list, for_start_date, for_end_date):
         if self.enable != 1:
@@ -161,27 +225,29 @@ class TCMBConnection:
         """
         if not tcmb_date_is_maintained(for_date):
             frappe.throw(
-                _("TCMB does not maintain exchange rates on or before {0}.").format(
-                    formatdate(EARLIEST_TCMB_DATE)
-                )
+                _("TCMB does not maintain exchange rates before {0}.").format(formatdate(EARLIEST_TCMB_DATE)),
+                exc=TCMBRateNotFound,
             )
         if depth > LOOKBACK_LIMIT_DAYS:
             frappe.throw(
                 _("No TCMB rate was found within {0} days before {1}.").format(
                     LOOKBACK_LIMIT_DAYS, formatdate(for_date)
-                )
+                ),
+                exc=TCMBRateNotFound,
             )
         if depth:
             TCMBCurrency.pause(self.batch_pause_seconds)
 
-        found = announced_rates_in(self.get_exchange_rates(currency_list, for_date, for_date))
+        rows, _total_count = self.get_exchange_rates(currency_list, for_date, for_date)
+        found = announced_rates_in(rows)
         if found:
             return found[0]
 
         return self.retrieve_announced_rate(currency_list, add_days(for_date, -self.a_day), depth + 1)
 
-    def record_exchange_rates(self, dated_rates: list[tuple]) -> None:
+    def record_exchange_rates(self, dated_rates: list[tuple]) -> list:
         """Write rates chosen by a recording rule. Retrieval does not call this."""
+        written: list = []
         for day, rates in dated_rates:
             if not rates:
                 continue
@@ -190,12 +256,17 @@ class TCMBConnection:
                 self.enable_update,
                 self.rate_options,
             )
+            written.append(getdate(day))
+        return sorted(written)
 
-    def get_exchange_rates(self, currency_list: list, from_date, to_date) -> list:
+    def get_exchange_rates(self, currency_list: list, from_date, to_date) -> tuple[list, int]:
         series_list = self._selected_series(currency_list)
         if not series_list:
-            return []
-        return normalize_rate_items(self.connect(series_list, from_date, to_date))
+            return [], 0
+        response = self.connect(series_list, from_date, to_date)
+        if not isinstance(response, dict):
+            return normalize_rate_items(response), 0
+        return normalize_rate_items(response), cint(response.get("totalCount"))
 
     def _selected_series(self, currency_list: list) -> list[str]:
         selected: list[str] = []
@@ -210,6 +281,10 @@ class TCMBConnection:
         if not selected:
             frappe.throw(_("Select a TCMB rate and a transaction type in the company settings."))
         return selected
+
+
+def _chunk_has_weekday(chunk_start, chunk_end) -> bool:
+    return any(day.weekday() < 5 for day in calendar_days(chunk_start, chunk_end))
 
 
 def announced_rates_in(rows: list[dict]) -> list[AnnouncedRate]:

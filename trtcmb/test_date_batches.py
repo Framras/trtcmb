@@ -62,9 +62,10 @@ class TestTCMBDateBatches(UnitTestCase):
             date(2026, 11, 6),
         )
 
-    def test_start_on_or_before_2_january_1950_uses_today(self):
+    def test_start_before_2_january_1950_uses_today(self):
         today = date(2026, 11, 6)
-        self.assertEqual(resolve_import_start(date(1950, 1, 2), today), today)
+        self.assertEqual(resolve_import_start(date(1950, 1, 2), today), date(1950, 1, 2))
+        self.assertEqual(resolve_import_start(date(1950, 1, 1), today), today)
         self.assertEqual(resolve_import_start(date(1949, 12, 31), today), today)
         self.assertEqual(resolve_import_start(date(1950, 1, 3), today), date(1950, 1, 3))
         self.assertEqual(
