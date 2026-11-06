@@ -33,6 +33,8 @@ class RecordingRule:
             for index, (announced_on, rate) in enumerate(points):
                 next_on = points[index + 1][0] if index + 1 < len(points) else None
                 start, end = self.bounds(announced_on, next_on, save_until)
+                if index == 0 and announced_on < start and save_from <= announced_on <= save_until:
+                    recorded.setdefault(announced_on, {})[series] = rate
                 for day in calendar_days(start, end):
                     if save_from <= day <= save_until:
                         recorded.setdefault(day, {})[series] = rate
@@ -52,7 +54,11 @@ class FirstWorkingDay(RecordingRule):
 
 
 class ImmediateDay(RecordingRule):
-    """Store a rate from the day after it is announced through the next announced day."""
+    """Store a rate from the day after it is announced through the next announced day.
+
+    The first announcement has no earlier rate to cover its own day, so that day
+    keeps the announced rate.
+    """
 
     name = IMMEDIATE_DAY
 

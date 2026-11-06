@@ -113,6 +113,19 @@ class TestTCMBDateBatches(UnitTestCase):
         self.assertEqual(recorded[date(2026, 1, 5)][series], 41)
         self.assertNotIn(date(2026, 1, 1), recorded)
 
+    def test_immediate_day_keeps_its_first_announcement_on_that_day(self):
+        series = "TP_DK_USD_A_YTL"
+        recorded = dict(
+            immediate_day_rates(
+                [AnnouncedRate(date(1999, 1, 4), {series: 1})],
+                date(1999, 1, 4),
+                date(1999, 1, 6),
+            )
+        )
+        self.assertEqual(recorded[date(1999, 1, 4)][series], 1)
+        self.assertEqual(recorded[date(1999, 1, 5)][series], 1)
+        self.assertEqual(recorded[date(1999, 1, 6)][series], 1)
+
     def test_duplicate_insert_updates_the_existing_rate_instead_of_aborting(self):
         newdoc = MagicMock()
         newdoc.insert.side_effect = DuplicateEntryError

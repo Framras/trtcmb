@@ -63,6 +63,40 @@ class TestImportSafety(UnitTestCase):
             start_on_boundary.get_exchange_rates_for_enabled_currencies(incremental=False)
         self.assertEqual(boundary_written, [date(1950, 1, 2)])
 
+    def test_carried_rate_is_kept_per_series(self):
+        usd = "TP_DK_USD_A_YTL"
+        eur = "TP_DK_EUR_A_YTL"
+        table = {
+            date(2025, 12, 31): {usd: 42.90, eur: 50.50},
+            date(2026, 1, 2): {usd: 42.92, eur: 50.37},
+            date(2026, 1, 5): {eur: 50.38},
+            date(2026, 1, 6): NULL_RATE,
+        }
+        conn, _updates = self._connection(start=date(2026, 1, 1), today=date(2026, 1, 6), batch_days=1)
+        written = {}
+        with self._fixed_today(date(2026, 1, 6)), self._feed(conn, table), self._capture_rates(conn, written):
+            conn.get_exchange_rates_for_enabled_currencies(incremental=False)
+        self.assertEqual(written[date(2026, 1, 6)][usd], 42.92)
+        self.assertEqual(written[date(2026, 1, 6)][eur], 50.38)
+
+    def test_missing_series_day_fails_the_run(self):
+        table = {date(1950, 1, 2): 4, date(1950, 1, 3): NULL_RATE}
+        conn, updates = self._connection(start=date(1950, 1, 3), today=date(1950, 1, 3), batch_days=1)
+
+        def drop_rates(*args, **kwargs):
+            return [(day, {}) for day, _rates in rates_for_rule(*args, **kwargs)]
+
+        with (
+            self._fixed_today(date(1950, 1, 3)),
+            self._feed(conn, table),
+            self._capture(conn, []),
+            patch("trtcmb.TCMBConnection.rates_for_rule", side_effect=drop_rates),
+            self.assertRaises(Exception) as caught,
+        ):
+            conn.get_exchange_rates_for_enabled_currencies(incremental=False)
+        self.assertIn("did not record", str(caught.exception))
+        self.assertEqual(updates, [])
+
     def test_anchor_missing_but_range_has_data_proceeds(self):
         eur_start = self._run(date(1999, 1, 4), date(1999, 1, 4), {date(1999, 1, 4): 1})
         self.assertEqual(eur_start, [date(1999, 1, 4)])
@@ -289,7 +323,14 @@ def _rows(start, end, table):
         rate = table.get(getdate(day))
         if rate is None:
             continue
-        rows.append({"Tarih": getdate(day).strftime("%d-%m-%Y"), SERIES: None if rate is NULL_RATE else rate})
+        stamped = getdate(day).strftime("%d-%m-%Y")
+        if isinstance(rate, dict):
+            row = {"Tarih": stamped}
+            for key, value in rate.items():
+                row[key] = None if value is NULL_RATE else value
+            rows.append(row)
+            continue
+        rows.append({"Tarih": stamped, SERIES: None if rate is NULL_RATE else rate})
     return rows, len(rows)
 
 

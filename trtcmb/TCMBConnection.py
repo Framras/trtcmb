@@ -1,3 +1,5 @@
+from datetime import date
+
 import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, formatdate, getdate, nowdate
@@ -9,7 +11,7 @@ from trtcmb.dates import (
     resolve_import_start,
     tcmb_date_is_maintained,
 )
-from trtcmb.recording import AnnouncedRate, normalize_recording_rule, rates_for_rule
+from trtcmb.recording import IMMEDIATE_DAY, AnnouncedRate, normalize_recording_rule, rates_for_rule
 from trtcmb.TCMBCurrency import TCMBCurrency
 from trtcmb.TCMBCurrencyExchange import (
     DEFAULT_BATCH_DAYS,
@@ -112,6 +114,8 @@ class TCMBConnection:
         recorded_days = 0
         last_recorded = None
         empty_chunks = 0
+        covered: dict[str, date] = {}
+        self._note_coverage(covered, carried, save_from)
 
         for chunk_start, chunk_end in iter_date_batches(save_from, today, self.batch_days):
             TCMBCurrency.pause(self.batch_pause_seconds)
@@ -120,12 +124,20 @@ class TCMBConnection:
             outage = total_count == 0 and _chunk_has_weekday(chunk_start, chunk_end)
             written_days: list = []
             if not outage:
+                self._note_coverage(covered, chunk_announcements, save_from)
                 recorded = rates_for_rule(
                     self.rate_recording_rule,
-                    ([carried] if carried else []) + chunk_announcements,
+                    carried + chunk_announcements,
                     chunk_start,
                     chunk_end,
                 )
+                missing = _missing_series_days(recorded, chunk_start, chunk_end, covered)
+                if missing:
+                    frappe.throw(
+                        _("TCMB import for {0} did not record {1}.").format(
+                            self.company, ", ".join(missing)
+                        )
+                    )
                 written_days = self.record_exchange_rates(recorded)
             if written_days:
                 latest = max(written_days)
@@ -139,8 +151,7 @@ class TCMBConnection:
                         self.company, formatdate(chunk_start), formatdate(chunk_end)
                     )
                 )
-            if chunk_announcements:
-                carried = max(chunk_announcements, key=lambda item: item.announced_on)
+            carried = _merge_carried(carried, chunk_announcements)
             self._commit_chunk()
             if outage and recorded_days and not written_days:
                 break
@@ -163,11 +174,16 @@ class TCMBConnection:
             )
         return last_recorded
 
-    def _anchor_for_range(self, currency_list: list, save_from, today) -> AnnouncedRate | None:
-        """Return the rate before save_from, or None when the range itself has the first rate."""
+    def _anchor_for_range(self, currency_list: list, save_from, today) -> list[AnnouncedRate]:
+        """Return the latest rate of each series before save_from.
+
+        An anchor day that quotes only one series does not hide an earlier rate
+        for another series. When nothing is found, the range's own first
+        announcement is used and no anchor is carried.
+        """
         prior_day = add_days(save_from, -self.a_day)
         try:
-            return self.retrieve_announced_rate(currency_list, prior_day)
+            return self._rates_on_or_before(currency_list, prior_day)
         except TCMBRateNotFound:
             first_on = self._scan_forward_for_announcement(currency_list, save_from, today)
             if not first_on:
@@ -177,7 +193,51 @@ class TCMBConnection:
                     self.company, formatdate(first_on)
                 )
             )
-            return None
+            return []
+
+    def _rates_on_or_before(self, currency_list: list, for_date) -> list[AnnouncedRate]:
+        """Walk back until every requested series has a rate, or the lookback ends."""
+        if not tcmb_date_is_maintained(for_date):
+            frappe.throw(
+                _("TCMB does not maintain exchange rates before {0}.").format(formatdate(EARLIEST_TCMB_DATE)),
+                exc=TCMBRateNotFound,
+            )
+        needed = _response_keys(currency_list)
+        found: dict[str, tuple[date, float]] = {}
+        day = getdate(for_date)
+        for depth in range(LOOKBACK_LIMIT_DAYS + 1):
+            if not tcmb_date_is_maintained(day):
+                break
+            if depth:
+                TCMBCurrency.pause(self.batch_pause_seconds)
+            rows, _total_count = self.get_exchange_rates(currency_list, day, day)
+            for item in announced_rates_in(rows):
+                for series, rate in item.rates.items():
+                    if series not in found:
+                        found[series] = (getdate(item.announced_on), rate)
+            if needed and needed <= set(found):
+                break
+            day = getdate(add_days(day, -self.a_day))
+        if not found:
+            frappe.throw(
+                _("No TCMB rate was found within {0} days before {1}.").format(
+                    LOOKBACK_LIMIT_DAYS, formatdate(for_date)
+                ),
+                exc=TCMBRateNotFound,
+            )
+        return [AnnouncedRate(announced_on, {series: rate}) for series, (announced_on, rate) in found.items()]
+
+    def _note_coverage(self, covered: dict[str, date], announcements: list[AnnouncedRate], save_from) -> None:
+        save_from = getdate(save_from)
+        for item in announcements:
+            announced_on = getdate(item.announced_on)
+            for series in item.rates:
+                if series in covered:
+                    continue
+                if self.rate_recording_rule == IMMEDIATE_DAY and announced_on < save_from:
+                    covered[series] = getdate(add_days(announced_on, 1))
+                else:
+                    covered[series] = announced_on
 
     def _scan_forward_for_announcement(self, currency_list: list, save_from, today):
         for offset in range(LOOKBACK_LIMIT_DAYS):
@@ -285,6 +345,38 @@ class TCMBConnection:
 
 def _chunk_has_weekday(chunk_start, chunk_end) -> bool:
     return any(day.weekday() < 5 for day in calendar_days(chunk_start, chunk_end))
+
+
+def _response_keys(currency_list: list) -> set[str]:
+    keys: set[str] = set()
+    for currency in currency_list:
+        for fieldname in ("buying_series", "selling_series"):
+            series = currency.get(fieldname)
+            if series:
+                keys.add(str(series).replace(".", "_"))
+    return keys
+
+
+def _merge_carried(carried: list[AnnouncedRate], announcements: list[AnnouncedRate]) -> list[AnnouncedRate]:
+    """Keep the latest announcement of each series. A one-currency day does not drop the others."""
+    latest: dict[str, tuple[date, float]] = {}
+    for item in list(carried) + list(announcements):
+        announced_on = getdate(item.announced_on)
+        for series, rate in item.rates.items():
+            current = latest.get(series)
+            if current is None or announced_on >= current[0]:
+                latest[series] = (announced_on, rate)
+    return [AnnouncedRate(announced_on, {series: rate}) for series, (announced_on, rate) in latest.items()]
+
+
+def _missing_series_days(recorded: list[tuple], chunk_start, chunk_end, covered: dict[str, date]) -> list[str]:
+    present = {getdate(day): set(rates) for day, rates in recorded}
+    missing: list[str] = []
+    for day in calendar_days(chunk_start, chunk_end):
+        for series, start in covered.items():
+            if getdate(start) <= day and series not in present.get(day, set()):
+                missing.append(f"{formatdate(day)} {series}")
+    return missing
 
 
 def announced_rates_in(rows: list[dict]) -> list[AnnouncedRate]:
