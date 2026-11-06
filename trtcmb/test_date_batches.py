@@ -1,8 +1,13 @@
 from datetime import date, datetime
+from unittest.mock import MagicMock, patch
 
+from frappe.exceptions import DuplicateEntryError
 from frappe.tests import UnitTestCase
 
-from trtcmb.TCMBConnection import iter_date_batches
+from trtcmb.TCMBCurrencyExchange import TCMBCurrencyExchange
+
+from trtcmb.dates import iter_date_batches, resolve_import_start
+from trtcmb.recording import AnnouncedRate, first_working_day_rates, immediate_day_rates
 from trtcmb.tasks import company_import_is_due
 from trtcmb.TCMBCurrencyExchange import (
     normalize_batch_days,
@@ -43,6 +48,74 @@ class TestTCMBDateBatches(UnitTestCase):
         self.assertFalse(company_import_is_due(now, "02:00:00", None))
         self.assertTrue(company_import_is_due(now, "00:58:00", date(2026, 11, 2)))
         self.assertFalse(company_import_is_due(now, "00:58:00", date(2026, 11, 3)))
+
+    def test_year_start_is_used_only_when_no_start_date_was_supplied(self):
+        self.assertEqual(resolve_import_start(None, date(2026, 11, 6)), date(2026, 1, 1))
+        self.assertEqual(resolve_import_start(date(2026, 3, 15), date(2026, 11, 6)), date(2026, 3, 15))
+        self.assertEqual(
+            resolve_import_start(
+                None,
+                date(2026, 11, 6),
+                last_updated=date(2026, 11, 5),
+                incremental=True,
+            ),
+            date(2026, 11, 6),
+        )
+
+    def test_first_working_day_keeps_the_announced_rate_on_holidays_after_it(self):
+        series = "TP_DK_USD_A_YTL"
+        announcements = [
+            AnnouncedRate(date(2026, 1, 1), {series: 40}),
+            AnnouncedRate(date(2026, 1, 5), {series: 50}),
+        ]
+
+        recorded = dict(
+            first_working_day_rates(announcements, date(2026, 1, 2), date(2026, 1, 5))
+        )
+
+        self.assertEqual(recorded[date(2026, 1, 2)][series], 40)
+        self.assertEqual(recorded[date(2026, 1, 3)][series], 40)
+        self.assertEqual(recorded[date(2026, 1, 4)][series], 40)
+        self.assertEqual(recorded[date(2026, 1, 5)][series], 50)
+        self.assertNotIn(date(2026, 1, 1), recorded)
+
+    def test_immediate_day_starts_the_rate_on_the_next_day(self):
+        series = "TP_DK_USD_A_YTL"
+        announcements = [
+            AnnouncedRate(date(2026, 1, 1), {series: 40}),
+            AnnouncedRate(date(2026, 1, 2), {series: 41}),
+            AnnouncedRate(date(2026, 1, 5), {series: 50}),
+        ]
+
+        recorded = dict(
+            immediate_day_rates(announcements, date(2026, 1, 2), date(2026, 1, 5))
+        )
+
+        self.assertEqual(recorded[date(2026, 1, 2)][series], 40)
+        self.assertEqual(recorded[date(2026, 1, 3)][series], 41)
+        self.assertEqual(recorded[date(2026, 1, 4)][series], 41)
+        self.assertEqual(recorded[date(2026, 1, 5)][series], 41)
+        self.assertNotIn(date(2026, 1, 1), recorded)
+
+    def test_duplicate_insert_updates_the_existing_rate_instead_of_aborting(self):
+        newdoc = MagicMock()
+        newdoc.insert.side_effect = DuplicateEntryError
+        existing = MagicMock()
+        existing.exchange_rate = 40
+
+        with (
+            patch("trtcmb.TCMBCurrencyExchange.frappe.db.exists", side_effect=[None, "2026-01-05-USD-TRY-Buying"]),
+            patch("trtcmb.TCMBCurrencyExchange.frappe.db.get_value", return_value=40),
+            patch("trtcmb.TCMBCurrencyExchange.frappe.new_doc", return_value=newdoc),
+            patch("trtcmb.TCMBCurrencyExchange.frappe.get_doc", return_value=existing),
+        ):
+            TCMBCurrencyExchange.commit_single_currency_exchange_rate(
+                {"Tarih": "05-01-2026", "TP_DK_USD_A_YTL": 41},
+                enable_update=1,
+            )
+
+        self.assertEqual(existing.exchange_rate, 41)
+        existing.save.assert_called_once_with(ignore_permissions=True)
 
     def test_batch_size_defaults_when_unset_and_caps_at_thirty_days(self):
         self.assertEqual(normalize_batch_days(0), 5)

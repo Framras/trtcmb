@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import NamedTuple
 
 import frappe
+from frappe.exceptions import DuplicateEntryError, UniqueValidationError
 from frappe.utils import cint, flt, getdate
 
 DEFAULT_BATCH_DAYS = 5
@@ -69,25 +70,34 @@ class TCMBCurrencyExchange:
                 "for_selling": for_selling,
             }
             existing_name = frappe.db.exists(cls.doctype, filters)
-
             if existing_name:
-                if enable_update != 1:
-                    continue
-                current_rate = flt(frappe.db.get_value(cls.doctype, existing_name, "exchange_rate"))
-                if current_rate == exchange_rate:
-                    continue
-                frdoc = frappe.get_doc(cls.doctype, existing_name)
-                frdoc.exchange_rate = exchange_rate
-                frdoc.save(ignore_permissions=True)
-            else:
-                newdoc = frappe.new_doc(cls.doctype)
-                newdoc.date = exchange_rate_date
-                newdoc.from_currency = from_currency
-                newdoc.to_currency = cls.to_currency
-                newdoc.for_buying = for_buying
-                newdoc.for_selling = for_selling
-                newdoc.exchange_rate = exchange_rate
+                cls._update_exchange_rate(existing_name, exchange_rate, enable_update)
+                continue
+
+            newdoc = frappe.new_doc(cls.doctype)
+            newdoc.date = exchange_rate_date
+            newdoc.from_currency = from_currency
+            newdoc.to_currency = cls.to_currency
+            newdoc.for_buying = for_buying
+            newdoc.for_selling = for_selling
+            newdoc.exchange_rate = exchange_rate
+            try:
                 newdoc.insert(ignore_permissions=True)
+            except (DuplicateEntryError, UniqueValidationError):
+                existing_name = frappe.db.exists(cls.doctype, filters)
+                if existing_name:
+                    cls._update_exchange_rate(existing_name, exchange_rate, enable_update)
+
+    @classmethod
+    def _update_exchange_rate(cls, name: str, exchange_rate: float, enable_update: int) -> None:
+        if enable_update != 1:
+            return
+        current_rate = flt(frappe.db.get_value(cls.doctype, name, "exchange_rate"))
+        if current_rate == exchange_rate:
+            return
+        frdoc = frappe.get_doc(cls.doctype, name)
+        frdoc.exchange_rate = exchange_rate
+        frdoc.save(ignore_permissions=True)
 
 
 class RateOptions(NamedTuple):

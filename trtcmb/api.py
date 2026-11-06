@@ -11,15 +11,11 @@ def initiate_currency_exchange_rates(company: str | None = None):
     if not company:
         frappe.throw(_("Select a company before initiating TCMB EVDS integration."))
 
-    frappe.enqueue(
-        run_currency_exchange_import,
-        queue="long",
-        timeout=3600,
-        company=company,
+    enqueue_currency_exchange_import(
+        company,
         incremental=False,
-        enqueue_after_commit=True,
         job_id=f"trtcmb-import-{frappe.scrub(company)}",
-        deduplicate=True,
+        after_commit=True,
     )
     frappe.msgprint(
         _("TCMB exchange rates are being imported in 5-day batches in the background."),
@@ -29,8 +25,20 @@ def initiate_currency_exchange_rates(company: str | None = None):
     return "queued"
 
 
-def run_currency_exchange_import(company: str, incremental: bool = False):
-    TCMBConnection(company=company).get_exchange_rates_for_enabled_currencies(
-        datagroup_code="bie_dkdovizgn",
+def enqueue_currency_exchange_import(
+    company: str, *, incremental: bool, job_id: str, after_commit: bool
+) -> None:
+    frappe.enqueue(
+        run_currency_exchange_import,
+        queue="long",
+        timeout=3600,
+        company=company,
         incremental=incremental,
+        enqueue_after_commit=after_commit,
+        job_id=job_id,
+        deduplicate=True,
     )
+
+
+def run_currency_exchange_import(company: str, incremental: bool = False):
+    TCMBConnection(company=company).get_exchange_rates_for_enabled_currencies(incremental=incremental)

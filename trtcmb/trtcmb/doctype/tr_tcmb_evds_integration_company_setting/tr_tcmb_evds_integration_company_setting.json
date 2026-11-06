@@ -17,6 +17,8 @@
     "enable_update",
     "initiate_integration",
     "last_updated",
+    "assignment_strategy_section",
+    "rate_recording_rule",
     "rate_options_section",
     "fetch_buying_rate",
     "buying_rate_for_buying",
@@ -48,11 +50,11 @@
       "reqd": 1
     },
     {
+      "description": "A date entered here is used as entered. Leave empty to import from 1 January of the current year.",
       "fieldname": "start_date",
       "fieldtype": "Date",
       "in_list_view": 1,
-      "label": "Default Integration Start Date",
-      "reqd": 1
+      "label": "Default Integration Start Date"
     },
     {
       "default": "5",
@@ -80,6 +82,21 @@
       "fieldname": "last_updated",
       "fieldtype": "Date",
       "label": "Last Updated Date"
+    },
+    {
+      "fieldname": "assignment_strategy_section",
+      "fieldtype": "Section Break",
+      "label": "Assignment Strategy"
+    },
+    {
+      "default": "First Working Day",
+      "description": "Choose one strategy. First Working Day stores a TCMB rate on the day it is announced and on the holidays after it. Immediate Day stores that rate from the next day through the next announced day.",
+      "fieldname": "rate_recording_rule",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Assignment Strategy",
+      "options": "First Working Day\nImmediate Day",
+      "reqd": 1
     },
     {
       "fieldname": "column_break_5",
@@ -144,7 +161,7 @@
       "label": "Use Selling Rate in Selling Transactions"
     }
   ],
-  "modified": "2026-11-03 15:28:00.000000",
+  "modified": "2026-11-06 21:05:00.000000",
   "modified_by": "Administrator",
   "module": "Trtcmb",
   "name": "TR TCMB EVDS Integration Company Setting",

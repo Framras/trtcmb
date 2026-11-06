@@ -3,7 +3,8 @@ from datetime import datetime, time
 import frappe
 from frappe.utils import get_time, getdate, now_datetime
 
-from trtcmb.api import run_currency_exchange_import
+from trtcmb.api import enqueue_currency_exchange_import
+from trtcmb.TCMBCurrency import TCMBCurrency
 
 DEFAULT_RUN_TIME = time(0, 58)
 
@@ -12,22 +13,18 @@ def import_due_companies():
     now = now_datetime()
     today = getdate(now)
     companies = frappe.get_all(
-        "TR TCMB EVDS Integration Company Setting",
+        TCMBCurrency.company_setting_doctype,
         filters={"enable": 1},
         fields=["name", "daily_run_time", "last_updated"],
     )
     for company in companies:
         if not company_import_is_due(now, company.daily_run_time, company.last_updated, today):
             continue
-        frappe.enqueue(
-            run_currency_exchange_import,
-            queue="long",
-            timeout=3600,
-            company=company.name,
+        enqueue_currency_exchange_import(
+            company.name,
             incremental=True,
-            enqueue_after_commit=False,
             job_id=f"trtcmb-daily-{frappe.scrub(company.name)}-{today}",
-            deduplicate=True,
+            after_commit=False,
         )
 
 

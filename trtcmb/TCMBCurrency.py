@@ -4,6 +4,8 @@ import frappe
 import requests
 from frappe import _
 
+from trtcmb.TCMBCurrencyExchange import TCMBCurrencyExchange
+
 RETRYABLE_STATUS = {429, 502, 503, 504}
 
 
@@ -70,12 +72,15 @@ class TCMBCurrency:
                 continue
             currency_code = tcmb_currency_data[2]
             rate_type = tcmb_currency_data[3]
-            if currency_code not in enabled_names or rate_type not in ["A", "S"]:
+            if currency_code not in enabled_names or rate_type not in (
+                TCMBCurrencyExchange.buying_code,
+                TCMBCurrencyExchange.selling_code,
+            ):
                 continue
             currency_row = series_by_currency.setdefault(
                 currency_code, {"name": currency_code, "buying_series": None, "selling_series": None}
             )
-            if rate_type == "A":
+            if rate_type == TCMBCurrencyExchange.buying_code:
                 currency_row["buying_series"] = serie_code
             else:
                 currency_row["selling_series"] = serie_code
