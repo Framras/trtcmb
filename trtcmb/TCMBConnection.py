@@ -126,9 +126,10 @@ class TCMBConnection:
             written_days: list = []
             if not outage:
                 self._note_coverage(covered, chunk_announcements, save_from)
+                announcements = carried + chunk_announcements
                 recorded = rates_for_rule(
                     self.rate_recording_rule,
-                    carried + chunk_announcements,
+                    announcements,
                     chunk_start,
                     chunk_end,
                 )
@@ -139,6 +140,7 @@ class TCMBConnection:
                     chunk_end,
                     covered,
                     self.rate_recording_rule,
+                    seed_before=_seed_before_chunk(announcements, chunk_start),
                 )
                 missing = _missing_series_days(recorded, chunk_start, chunk_end, covered)
                 if missing:
@@ -371,6 +373,24 @@ def _merge_carried(carried: list[AnnouncedRate], announcements: list[AnnouncedRa
             if current is None or announced_on >= current[0]:
                 latest[series] = (announced_on, rate)
     return [AnnouncedRate(announced_on, {series: rate}) for series, (announced_on, rate) in latest.items()]
+
+
+def _seed_before_chunk(announcements: list[AnnouncedRate], chunk_start) -> dict[str, float]:
+    """Latest EVDS rate of each series announced before the chunk (Immediate Day fallback)."""
+    chunk_start = getdate(chunk_start)
+    seeds: dict[str, tuple[date, float]] = {}
+    for item in announcements:
+        announced_on = getdate(item.announced_on)
+        if announced_on >= chunk_start:
+            continue
+        for series, rate in item.rates.items():
+            numeric = flt(rate)
+            if numeric <= 0:
+                continue
+            current = seeds.get(series)
+            if current is None or announced_on >= current[0]:
+                seeds[series] = (announced_on, numeric)
+    return {series: rate for series, (_on, rate) in seeds.items()}
 
 
 def _missing_series_days(recorded: list[tuple], chunk_start, chunk_end, covered: dict[str, date]) -> list[str]:
