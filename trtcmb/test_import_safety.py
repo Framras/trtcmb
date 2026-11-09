@@ -199,26 +199,46 @@ class TestImportSafety(UnitTestCase):
         friday = date(2026, 1, 9)
         monday = date(2026, 1, 12)
         table = {date(2026, 1, 8): 7, friday: 9, monday: 11}
-        for rule, saturday_rate in (("First Working Day", 9), ("Immediate Day", 9)):
-            written = {}
-            conn, _updates = self._connection(
-                start=friday, today=monday, batch_days=5, rule=rule
-            )
-            with self._fixed_today(monday), self._feed(conn, table), self._capture_rates(conn, written):
-                conn.get_exchange_rates_for_enabled_currencies(incremental=False)
-            self.assertEqual(written[date(2026, 1, 10)][SERIES], saturday_rate)
-            self.assertEqual(written[date(2026, 1, 11)][SERIES], saturday_rate)
-        whole = rates_for_rule(
-            "First Working Day",
-            _announcements(table),
-            friday,
-            monday,
+        written = {}
+        conn, _updates = self._connection(
+            start=friday, today=monday, batch_days=5, rule="First Working Day"
         )
-        recorded = {}
-        conn, _updates = self._connection(start=friday, today=monday, batch_days=5)
-        with self._fixed_today(monday), self._feed(conn, table), self._capture_rates(conn, recorded):
+        with self._fixed_today(monday), self._feed(conn, table), self._capture_rates(conn, written):
             conn.get_exchange_rates_for_enabled_currencies(incremental=False)
-        self.assertEqual(recorded, dict(whole))
+        self.assertEqual(written[date(2026, 1, 10)][SERIES], 9)
+        self.assertEqual(written[date(2026, 1, 11)][SERIES], 9)
+
+        bulletin_written = {}
+        immediate, _updates = self._connection(
+            start=friday, today=monday, batch_days=5, rule="Immediate Day"
+        )
+        with (
+            self._fixed_today(monday),
+            self._feed(immediate, table),
+            self._capture_rates(immediate, bulletin_written),
+            patch(
+                "trtcmb.TCMBConnection.apply_strategy_empty_fill",
+                side_effect=lambda recorded, currency_list, chunk_start, chunk_end, covered, rule, **kwargs: (
+                    recorded
+                    if rule != "Immediate Day"
+                    else [
+                        (day, rates)
+                        for day, rates in (
+                            list(recorded)
+                            + [
+                                (date(2026, 1, 10), {SERIES: 12.5}),
+                                (date(2026, 1, 11), {SERIES: 12.5}),
+                            ]
+                        )
+                    ]
+                ),
+            ),
+        ):
+            immediate.get_exchange_rates_for_enabled_currencies(incremental=False)
+        self.assertEqual(bulletin_written[date(2026, 1, 10)][SERIES], 12.5)
+        self.assertEqual(bulletin_written[date(2026, 1, 11)][SERIES], 12.5)
+        self.assertEqual(bulletin_written[friday][SERIES], 9)
+        self.assertEqual(bulletin_written[monday][SERIES], 11)
 
     def test_boundary_error_says_before_2_january_1950(self):
         conn, _updates = self._connection(start=date(1950, 1, 2), today=date(1950, 1, 2))
@@ -266,6 +286,12 @@ class TestImportSafety(UnitTestCase):
             patch(
                 "trtcmb.TCMBConnection.TCMBCurrency.get_list_of_enabled_currencies",
                 return_value=[_usd()],
+            )
+        )
+        stack.enter_context(
+            patch(
+                "trtcmb.TCMBConnection.apply_strategy_empty_fill",
+                side_effect=lambda recorded, *_args, **_kwargs: recorded,
             )
         )
         return stack

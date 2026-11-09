@@ -4,6 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, formatdate, getdate, nowdate
 
+from trtcmb.bulletin import apply_strategy_empty_fill
 from trtcmb.dates import (
     EARLIEST_TCMB_DATE,
     calendar_days,
@@ -130,6 +131,14 @@ class TCMBConnection:
                     carried + chunk_announcements,
                     chunk_start,
                     chunk_end,
+                )
+                recorded = apply_strategy_empty_fill(
+                    recorded,
+                    currency_list,
+                    chunk_start,
+                    chunk_end,
+                    covered,
+                    self.rate_recording_rule,
                 )
                 missing = _missing_series_days(recorded, chunk_start, chunk_end, covered)
                 if missing:

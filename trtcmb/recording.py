@@ -1,7 +1,7 @@
 from datetime import date
 from typing import NamedTuple
 
-from frappe.utils import add_days, flt, getdate
+from frappe.utils import flt, getdate
 
 from trtcmb.dates import calendar_days
 
@@ -15,78 +15,64 @@ class AnnouncedRate(NamedTuple):
 
 
 class RecordingRule:
-    """Template for dating an announced rate. Subclasses choose only the date span."""
+    """Shared EVDS placement; subclasses only decide how empty days are filled."""
 
     name: str
 
-    def bounds(self, announced_on: date, next_on: date | None, save_until: date) -> tuple[date, date]:
-        raise NotImplementedError
+    def fill_empty(
+        self,
+        recorded: dict[date, dict],
+        series_names: set[str],
+        save_from: date,
+        save_until: date,
+        *,
+        seed_before: dict[str, float],
+        seed_after: dict[str, float],
+    ) -> None:
+        """Fill days with no EVDS rate. Immediate Day leaves gaps for the bulletin layer."""
+        return None
 
     def rates(
         self, announcements: list[AnnouncedRate], save_from, save_until
     ) -> list[tuple[date, dict]]:
         save_from = getdate(save_from)
         save_until = getdate(save_until)
-        recorded: dict[date, dict] = {}
-
-        for series, points in _series_points(announcements).items():
-            for index, (announced_on, rate) in enumerate(points):
-                next_on = points[index + 1][0] if index + 1 < len(points) else None
-                start, end = self.bounds(announced_on, next_on, save_until)
-                for day in calendar_days(start, end):
-                    if save_from <= day <= save_until:
-                        recorded.setdefault(day, {})[series] = rate
-
+        recorded, series_names, seed_before, seed_after = place_announced_rates(
+            announcements, save_from, save_until
+        )
+        self.fill_empty(
+            recorded,
+            series_names,
+            save_from,
+            save_until,
+            seed_before=seed_before,
+            seed_after=seed_after,
+        )
         return [(day, recorded[day]) for day in sorted(recorded)]
 
 
 class FirstWorkingDay(RecordingRule):
-    """Store a rate on the announcement day and on the holidays that follow it."""
+    """EVDS days keep their rate. Empty days use the previous non-empty EVDS rate."""
 
     name = FIRST_WORKING_DAY
 
-    def bounds(self, announced_on: date, next_on: date | None, save_until: date) -> tuple[date, date]:
-        if next_on:
-            return announced_on, getdate(add_days(next_on, -1))
-        return announced_on, save_until
+    def fill_empty(
+        self,
+        recorded: dict[date, dict],
+        series_names: set[str],
+        save_from: date,
+        save_until: date,
+        *,
+        seed_before: dict[str, float],
+        seed_after: dict[str, float],
+    ) -> None:
+        fill_forward(recorded, series_names, save_from, save_until, seed_before=seed_before)
 
 
 class ImmediateDay(RecordingRule):
-    """Store each announced rate on its day, then fill empty days both ways.
-
-    Going forward, an empty day keeps the previous rate. Going backward, empty
-    days take the first found later rate. A Sales Invoice on an announcement day
-    therefore uses that day's own TCMB rate.
-    """
+    """EVDS days keep their rate. Empty days are filled from the TCMB bulletin."""
 
     name = IMMEDIATE_DAY
-
-    def bounds(self, announced_on: date, next_on: date | None, save_until: date) -> tuple[date, date]:
-        if next_on:
-            return announced_on, getdate(add_days(next_on, -1))
-        return announced_on, save_until
-
-    def rates(
-        self, announcements: list[AnnouncedRate], save_from, save_until
-    ) -> list[tuple[date, dict]]:
-        save_from = getdate(save_from)
-        save_until = getdate(save_until)
-        recorded = {day: dict(rates) for day, rates in super().rates(announcements, save_from, save_until)}
-        series_names: set[str] = {series for rates in recorded.values() for series in rates}
-        for item in announcements:
-            for series, rate in item.rates.items():
-                if flt(rate) > 0:
-                    series_names.add(series)
-
-        for series in series_names:
-            next_rate = None
-            for day in reversed(list(calendar_days(save_from, save_until))):
-                if series in recorded.get(day, {}):
-                    next_rate = recorded[day][series]
-                elif next_rate is not None:
-                    recorded.setdefault(day, {})[series] = next_rate
-
-        return [(day, recorded[day]) for day in sorted(recorded)]
 
 
 RECORDING_RULES: dict[str, RecordingRule] = {
@@ -110,6 +96,47 @@ def first_working_day_rates(announcements: list[AnnouncedRate], save_from, save_
 
 def immediate_day_rates(announcements: list[AnnouncedRate], save_from, save_until):
     return RECORDING_RULES[IMMEDIATE_DAY].rates(announcements, save_from, save_until)
+
+
+def place_announced_rates(
+    announcements: list[AnnouncedRate], save_from, save_until
+) -> tuple[dict[date, dict], set[str], dict[str, float], dict[str, float]]:
+    """Keep every EVDS rate on the day it was returned. Shared by all strategies."""
+    save_from = getdate(save_from)
+    save_until = getdate(save_until)
+    recorded: dict[date, dict] = {}
+    series_names: set[str] = set()
+    seed_before: dict[str, float] = {}
+    seed_after: dict[str, float] = {}
+    for series, points in _series_points(announcements).items():
+        series_names.add(series)
+        for announced_on, rate in points:
+            if save_from <= announced_on <= save_until:
+                recorded.setdefault(announced_on, {})[series] = rate
+            elif announced_on < save_from:
+                seed_before[series] = rate
+            elif series not in seed_after:
+                seed_after[series] = rate
+    return recorded, series_names, seed_before, seed_after
+
+
+def fill_forward(
+    recorded: dict[date, dict],
+    series_names: set[str],
+    save_from: date,
+    save_until: date,
+    *,
+    seed_before: dict[str, float] | None = None,
+) -> None:
+    """Empty day <- previous EVDS rate."""
+    seed_before = seed_before or {}
+    for series in series_names:
+        previous = seed_before.get(series)
+        for day in calendar_days(save_from, save_until):
+            if series in recorded.get(day, {}):
+                previous = recorded[day][series]
+            elif previous is not None:
+                recorded.setdefault(day, {})[series] = previous
 
 
 def _series_points(announcements: list[AnnouncedRate]) -> dict[str, list[tuple[date, float]]]:

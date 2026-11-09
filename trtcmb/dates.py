@@ -50,6 +50,18 @@ def calendar_days(start, end) -> list[date]:
     return days
 
 
+def is_business_day(value) -> bool:
+    """Weekday Mon–Fri. Official holidays are not modelled yet."""
+    return getdate(value).weekday() < 5
+
+
+def previous_business_day(value) -> date:
+    day = getdate(add_days(getdate(value), -1))
+    while not is_business_day(day):
+        day = getdate(add_days(day, -1))
+    return day
+
+
 def iter_date_batches(from_date, to_date, batch_days: int = DEFAULT_BATCH_DAYS) -> list[tuple[date, date]]:
     """Return inclusive date windows of `batch_days` covering from_date through to_date."""
     if batch_days < 1:

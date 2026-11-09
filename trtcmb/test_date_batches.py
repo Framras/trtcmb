@@ -95,7 +95,7 @@ class TestTCMBDateBatches(UnitTestCase):
         self.assertEqual(recorded[date(2026, 1, 5)][series], 50)
         self.assertNotIn(date(2026, 1, 1), recorded)
 
-    def test_immediate_day_keeps_the_announced_rate_on_its_own_day(self):
+    def test_immediate_day_keeps_only_evds_days_until_bulletin_fills(self):
         series = "TP_DK_USD_A_YTL"
         announcements = [
             AnnouncedRate(date(2026, 10, 19), {series: 49.4463}),
@@ -111,22 +111,30 @@ class TestTCMBDateBatches(UnitTestCase):
         self.assertEqual(recorded[date(2026, 10, 20)][series], 49.5523)
         self.assertEqual(recorded[date(2026, 10, 21)][series], 49.578)
 
-    def test_immediate_day_fills_empty_days_forward_and_backward(self):
-        series = "TP_DK_USD_A_YTL"
+    def test_evds_rate_stays_on_its_day_for_both_strategies(self):
+        series = "TP_DK_EUR_S"
         announcements = [
-            AnnouncedRate(date(2026, 1, 2), {series: 41}),
-            AnnouncedRate(date(2026, 1, 5), {series: 50}),
+            AnnouncedRate(date(2026, 10, 15), {series: 55.3027}),
+            AnnouncedRate(date(2026, 10, 16), {series: 55.4110}),
+            AnnouncedRate(date(2026, 10, 19), {series: 55.6180}),
+            AnnouncedRate(date(2026, 10, 20), {series: 55.5676}),
+            AnnouncedRate(date(2026, 10, 21), {series: 55.6191}),
         ]
-
-        recorded = dict(
-            immediate_day_rates(announcements, date(2026, 1, 1), date(2026, 1, 5))
-        )
-
-        self.assertEqual(recorded[date(2026, 1, 1)][series], 41)
-        self.assertEqual(recorded[date(2026, 1, 2)][series], 41)
-        self.assertEqual(recorded[date(2026, 1, 3)][series], 41)
-        self.assertEqual(recorded[date(2026, 1, 4)][series], 41)
-        self.assertEqual(recorded[date(2026, 1, 5)][series], 50)
+        window = (date(2026, 10, 16), date(2026, 10, 21))
+        first = dict(first_working_day_rates(announcements, *window))
+        immediate = dict(immediate_day_rates(announcements, *window))
+        for day, rate in (
+            (date(2026, 10, 16), 55.4110),
+            (date(2026, 10, 19), 55.6180),
+            (date(2026, 10, 20), 55.5676),
+            (date(2026, 10, 21), 55.6191),
+        ):
+            self.assertEqual(first[day][series], rate)
+            self.assertEqual(immediate[day][series], rate)
+        self.assertEqual(first[date(2026, 10, 17)][series], 55.4110)
+        self.assertEqual(first[date(2026, 10, 18)][series], 55.4110)
+        self.assertNotIn(date(2026, 10, 17), immediate)
+        self.assertNotIn(date(2026, 10, 18), immediate)
 
     def test_duplicate_insert_updates_the_existing_rate_instead_of_aborting(self):
         newdoc = MagicMock()
