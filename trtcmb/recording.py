@@ -33,8 +33,6 @@ class RecordingRule:
             for index, (announced_on, rate) in enumerate(points):
                 next_on = points[index + 1][0] if index + 1 < len(points) else None
                 start, end = self.bounds(announced_on, next_on, save_until)
-                if index == 0 and announced_on < start and save_from <= announced_on <= save_until:
-                    recorded.setdefault(announced_on, {})[series] = rate
                 for day in calendar_days(start, end):
                     if save_from <= day <= save_until:
                         recorded.setdefault(day, {})[series] = rate
@@ -54,16 +52,41 @@ class FirstWorkingDay(RecordingRule):
 
 
 class ImmediateDay(RecordingRule):
-    """Store a rate from the day after it is announced through the next announced day.
+    """Store each announced rate on its day, then fill empty days both ways.
 
-    The first announcement has no earlier rate to cover its own day, so that day
-    keeps the announced rate.
+    Going forward, an empty day keeps the previous rate. Going backward, empty
+    days take the first found later rate. A Sales Invoice on an announcement day
+    therefore uses that day's own TCMB rate.
     """
 
     name = IMMEDIATE_DAY
 
     def bounds(self, announced_on: date, next_on: date | None, save_until: date) -> tuple[date, date]:
-        return getdate(add_days(announced_on, 1)), (next_on or save_until)
+        if next_on:
+            return announced_on, getdate(add_days(next_on, -1))
+        return announced_on, save_until
+
+    def rates(
+        self, announcements: list[AnnouncedRate], save_from, save_until
+    ) -> list[tuple[date, dict]]:
+        save_from = getdate(save_from)
+        save_until = getdate(save_until)
+        recorded = {day: dict(rates) for day, rates in super().rates(announcements, save_from, save_until)}
+        series_names: set[str] = {series for rates in recorded.values() for series in rates}
+        for item in announcements:
+            for series, rate in item.rates.items():
+                if flt(rate) > 0:
+                    series_names.add(series)
+
+        for series in series_names:
+            next_rate = None
+            for day in reversed(list(calendar_days(save_from, save_until))):
+                if series in recorded.get(day, {}):
+                    next_rate = recorded[day][series]
+                elif next_rate is not None:
+                    recorded.setdefault(day, {})[series] = next_rate
+
+        return [(day, recorded[day]) for day in sorted(recorded)]
 
 
 RECORDING_RULES: dict[str, RecordingRule] = {

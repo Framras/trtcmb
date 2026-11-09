@@ -90,7 +90,7 @@
     },
     {
       "default": "First Working Day",
-      "description": "Choose one strategy. First Working Day stores a TCMB rate on the day it is announced and on the holidays after it. Immediate Day stores that rate from the next day through the next announced day.",
+      "description": "Choose one strategy. First Working Day stores a TCMB rate on the day it is announced and on the holidays after it. Immediate Day also stores the rate on the announcement day, fills empty days from the previous rate going forward, and fills remaining empty days from the next found rate going backward.",
       "fieldname": "rate_recording_rule",
       "fieldtype": "Select",
       "in_list_view": 1,

@@ -11,7 +11,7 @@ from trtcmb.dates import (
     resolve_import_start,
     tcmb_date_is_maintained,
 )
-from trtcmb.recording import IMMEDIATE_DAY, AnnouncedRate, normalize_recording_rule, rates_for_rule
+from trtcmb.recording import AnnouncedRate, normalize_recording_rule, rates_for_rule
 from trtcmb.TCMBCurrency import TCMBCurrency
 from trtcmb.TCMBCurrencyExchange import (
     DEFAULT_BATCH_DAYS,
@@ -228,15 +228,10 @@ class TCMBConnection:
         return [AnnouncedRate(announced_on, {series: rate}) for series, (announced_on, rate) in found.items()]
 
     def _note_coverage(self, covered: dict[str, date], announcements: list[AnnouncedRate], save_from) -> None:
-        save_from = getdate(save_from)
         for item in announcements:
             announced_on = getdate(item.announced_on)
             for series in item.rates:
-                if series in covered:
-                    continue
-                if self.rate_recording_rule == IMMEDIATE_DAY and announced_on < save_from:
-                    covered[series] = getdate(add_days(announced_on, 1))
-                else:
+                if series not in covered:
                     covered[series] = announced_on
 
     def _scan_forward_for_announcement(self, currency_list: list, save_from, today):

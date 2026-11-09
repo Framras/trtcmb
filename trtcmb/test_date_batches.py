@@ -95,36 +95,38 @@ class TestTCMBDateBatches(UnitTestCase):
         self.assertEqual(recorded[date(2026, 1, 5)][series], 50)
         self.assertNotIn(date(2026, 1, 1), recorded)
 
-    def test_immediate_day_starts_the_rate_on_the_next_day(self):
+    def test_immediate_day_keeps_the_announced_rate_on_its_own_day(self):
         series = "TP_DK_USD_A_YTL"
         announcements = [
-            AnnouncedRate(date(2026, 1, 1), {series: 40}),
+            AnnouncedRate(date(2026, 10, 19), {series: 49.4463}),
+            AnnouncedRate(date(2026, 10, 20), {series: 49.5523}),
+            AnnouncedRate(date(2026, 10, 21), {series: 49.578}),
+        ]
+
+        recorded = dict(
+            immediate_day_rates(announcements, date(2026, 10, 19), date(2026, 10, 21))
+        )
+
+        self.assertEqual(recorded[date(2026, 10, 19)][series], 49.4463)
+        self.assertEqual(recorded[date(2026, 10, 20)][series], 49.5523)
+        self.assertEqual(recorded[date(2026, 10, 21)][series], 49.578)
+
+    def test_immediate_day_fills_empty_days_forward_and_backward(self):
+        series = "TP_DK_USD_A_YTL"
+        announcements = [
             AnnouncedRate(date(2026, 1, 2), {series: 41}),
             AnnouncedRate(date(2026, 1, 5), {series: 50}),
         ]
 
         recorded = dict(
-            immediate_day_rates(announcements, date(2026, 1, 2), date(2026, 1, 5))
+            immediate_day_rates(announcements, date(2026, 1, 1), date(2026, 1, 5))
         )
 
-        self.assertEqual(recorded[date(2026, 1, 2)][series], 40)
+        self.assertEqual(recorded[date(2026, 1, 1)][series], 41)
+        self.assertEqual(recorded[date(2026, 1, 2)][series], 41)
         self.assertEqual(recorded[date(2026, 1, 3)][series], 41)
         self.assertEqual(recorded[date(2026, 1, 4)][series], 41)
-        self.assertEqual(recorded[date(2026, 1, 5)][series], 41)
-        self.assertNotIn(date(2026, 1, 1), recorded)
-
-    def test_immediate_day_keeps_its_first_announcement_on_that_day(self):
-        series = "TP_DK_USD_A_YTL"
-        recorded = dict(
-            immediate_day_rates(
-                [AnnouncedRate(date(1999, 1, 4), {series: 1})],
-                date(1999, 1, 4),
-                date(1999, 1, 6),
-            )
-        )
-        self.assertEqual(recorded[date(1999, 1, 4)][series], 1)
-        self.assertEqual(recorded[date(1999, 1, 5)][series], 1)
-        self.assertEqual(recorded[date(1999, 1, 6)][series], 1)
+        self.assertEqual(recorded[date(2026, 1, 5)][series], 50)
 
     def test_duplicate_insert_updates_the_existing_rate_instead_of_aborting(self):
         newdoc = MagicMock()
