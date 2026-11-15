@@ -1,9 +1,6 @@
 import frappe
 
-OLD_REPORT = "Gayrımenkul Kıymet Bakiyesi"
-NEW_REPORT = "Menkul Kıymet Bakiyesi"
-
-# Shipped with the app. Other Journal Entry property setters on a site are left in place.
+# Shipped with the app historically. Other Journal Entry property setters on a site are left in place.
 PROPERTY_SETTERS = (
     "Journal Entry-bill_no-in_global_search",
     "Journal Entry-bill_no-in_standard_filter",
@@ -26,12 +23,11 @@ CUSTOM_PERMS = (
 
 
 def execute() -> None:
-    """Drop Journal Entry form customizations and keep the legacy balance columns.
+    """Drop retired Journal Entry form customizations (property setters / custom perms).
 
-    The kıymet and brand columns stay as read-only custom fields so a later
-    trim of unused columns does not drop the historic values the balance report reads.
+    Kıymet report and Custom Fields are removed by remove_kiymet_artifacts.
+    Brand on Journal Entry Account is unchanged.
     """
-    _rename_report()
     _delete_if_present("Property Setter", PROPERTY_SETTERS + _search_field_setters())
     _delete_if_present("Custom DocPerm", CUSTOM_PERMS)
 
@@ -39,13 +35,6 @@ def execute() -> None:
 def clear_meta_cache() -> None:
     frappe.clear_cache(doctype="Journal Entry")
     frappe.clear_cache(doctype="Journal Entry Account")
-
-
-def _rename_report() -> None:
-    if frappe.db.exists("Report", OLD_REPORT) and not frappe.db.exists("Report", NEW_REPORT):
-        frappe.rename_doc("Report", OLD_REPORT, NEW_REPORT, force=True)
-    if frappe.db.exists("Report", NEW_REPORT):
-        frappe.db.set_value("Report", NEW_REPORT, "report_name", NEW_REPORT, update_modified=False)
 
 
 def _search_field_setters() -> tuple[str, ...]:
